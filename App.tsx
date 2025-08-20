@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Routes } from './src/routes';
 import { useAppFonts } from './src/constants/fonts';
 import { View, Text, Alert } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider} from 'react-native-safe-area-context';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {

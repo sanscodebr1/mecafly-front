@@ -34,7 +34,6 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
     <TouchableOpacity style={styles.productCard} onPress={onPress}>
       <View style={styles.productImagePlaceholder}>
         <Image source={{uri:product.pic}} style={{width:'100%',height:'100%'}} />
-
       </View>
       <Text style={styles.productName}>{product.name}</Text>
       <Text style={styles.productPrice}>{product.price}</Text>
@@ -90,7 +89,7 @@ const styles = StyleSheet.create({
     marginBottom: isWeb ? 6 : 8,
   },
   productName: {
-    fontSize: isWeb ? 12 : fontsizes.size14,
+    fontSize: isWeb ? 12 : fontsizes.size11,
     fontFamily: fonts.regular400,
     color: '#000000',
     marginBottom: isWeb ? 3 : 4,

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Image as RNImage } from 'react-native';
 import {
   View,
   Text,
@@ -52,33 +53,48 @@ export function ProfissionaisScreen() {
     {
       id: '1',
       name: 'João da Silva',
+      image: require('../../../../assets/images/profiles/worker1.png'),
       flightHours: '1500',
-      description: 'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.',
+      description: 'Piloto de drone agrícola com 2 anos de experiência atendendo milho. Opero drones com RTK/plan...',
     },
     {
       id: '2',
       name: 'Maria Santos',
+      image: require('../../../../assets/images/profiles/worker2.png'),
       flightHours: '2200',
-      description: 'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.',
+      description: 'Piloto de drone agrícola com 2 anos de experiência atendendo milho. Opero drones com RTK/plan...',
     },
     {
       id: '3',
       name: 'Pedro Oliveira',
+      image: require('../../../../assets/images/profiles/worker3.png'),
       flightHours: '1800',
-      description: 'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.',
+      description: 'Piloto de drone agrícola com 2 anos de experiência atendendo milho. Opero drones com RTK/plan...',
     },
     {
       id: '4',
       name: 'Ana Costa',
+      image: require('../../../../assets/images/profiles/worker4.png'),
       flightHours: '3000',
-      description: 'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.',
+      description: 'Piloto de drone agrícola com 2 anos de experiência atendendo milho. Opero drones com RTK/plan...',
     },
   ];
+
+    const bannerSrc = require('../../../../assets/images/homeImage.png');
+    const { width: iw, height: ih } = RNImage.resolveAssetSource(bannerSrc);
+    const bannerRatio = iw / ih;
+  
 
   const renderProfessionalCard = ({ item }: { item: any }) => (
     <View style={styles.professionalCard}>
       <View style={styles.cardHeader}>
-        <View style={styles.avatarPlaceholder} />
+        <View style={styles.avatarPlaceholder}>
+          <Image
+            source={item.image}
+            style={{ width: '100%', height: '100%', borderRadius: wp('2%') }}>
+              
+            </Image>
+        </View>
         <Text style={styles.professionalName}>{item.name}</Text>
       </View>
       
@@ -114,7 +130,14 @@ export function ProfissionaisScreen() {
       </View>
 
       {/* Banner Placeholder */}
-      <View style={styles.bannerPlaceholder} />
+      
+              <View style={styles.bannerPlaceholder}>
+                <Image
+                  source={bannerSrc}
+                  style={[styles.banner, { aspectRatio: bannerRatio }]}
+                  resizeMode="contain"
+                />
+              </View>
 
       {/* Professionals Section Header */}
       <View style={styles.professionalsSection}>
@@ -258,6 +281,7 @@ const styles = StyleSheet.create({
     borderRadius: wp('3.8%'),
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('1%'),
+    opacity: 0.5,
   },
   searchInput: {
     flex: 1,
@@ -273,17 +297,27 @@ const styles = StyleSheet.create({
     height: wp('6%'),
   },
   bannerPlaceholder: {
-    height: hp('18%'),
-    backgroundColor: '#D6DBDE',
+    alignSelf: 'center',
+  marginBottom: hp('2.5%'),
     marginHorizontal: wp('5%'),
-    marginBottom: hp('2.5%'),
-    borderRadius: wp('3%'),
-    ...(isWeb && {
-      height: hp('12%'),
-      marginHorizontal: wp('2%'),
-      marginBottom: hp('1.5%'),
-    }),
+  overflow: 'hidden',        // keeps rounded corners on the *container*
+  // backgroundColor: '#D6DBDE',// color behind letterboxing
+  ...(isWeb && {
+    marginHorizontal: wp('2%'),
+    marginBottom: hp('1.5%'),
+    marginTop: hp('8%'),
+  }),
   },
+
+  banner:{
+    width: '100%',
+    height: undefined,
+    aspectRatio: 16/9,
+    maxHeight: hp('28%'),
+    marginRight: wp('%'),
+
+  },
+
   professionalsSection: {
     marginHorizontal: wp('5%'),
     marginBottom: hp('2.5%'),

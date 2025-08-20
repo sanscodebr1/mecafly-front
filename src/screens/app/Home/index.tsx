@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
+import { Image as RNImage } from 'react-native';
 import {
   View,
   Text,
@@ -11,7 +12,7 @@ import {
   FlatList,
   Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { fonts } from '../../../constants/fonts';
@@ -57,15 +58,12 @@ export function HomeScreen() {
   };
 
     const categories = [
-      { id: '1', name: 'Drones', icon: require('../../../assets/images/drone.png') },
-      { id: '2', name: 'Controles', icon: require('../../../assets/images/controller.png') },
-      { id: '3', name: 'Acessórios', icon: require('../../../assets/images/acessory.png') },
-      { id: '4', name: 'Drones', icon: require('../../../assets/images/drone.png') },
-      { id: '5', name: 'Drones', icon: require('../../../assets/images/drone.png') },
-      { id: '6', name: 'Drones', icon: require('../../../assets/images/drone.png') },
-      { id: '7', name: 'Drones', icon: require('../../../assets/images/drone.png') },
-      { id: '8', name: 'Drones', icon: require('../../../assets/images/drone.png') },
-      { id: '9', name: 'Drones', icon: require('../../../assets/images/drone.png') },
+      { id: '1', name: 'Drones agras', icon: require('../../../assets/images/categories/drones.png') },
+      { id: '2', name: 'Baterias', icon: require('../../../assets/images/categories/baterias.png') },
+      { id: '3', name: 'Acessórios', icon: require('../../../assets/images/categories/acessorios.png') },
+      { id: '4', name: 'Partes e peças', icon: require('../../../assets/images/categories/partes.png') },
+      { id: '5', name: 'Geradores', icon: require('../../../assets/images/categories/geradores.png') },
+      { id: '6', name: 'Drones Consumer', icon: require('../../../assets/images/categories/dronesconsumer.png') },
   ];
 
   const renderCategoryItem = ({ item }: { item: any }) => (
@@ -85,11 +83,15 @@ export function HomeScreen() {
   const products = [
     { id: '1', name: 'Par de Helice U-CW (Branca) [T40,T20P,T50]', price: 'R$ 579,00', installment: 'ou 12x de R$ 54,72 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/par_de_helice_u_cw_branca_t40_t20p_t50_1055_1_f87468c1de7ee3e4c2d134e48a2a4a22.png' },
     { id: '2', name: 'Bateria inteligente T25', price: 'R$14.900,00', installment: 'ou 12x de R$ 1.408,07 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/bateria_inteligente_t25_213_1_4187030504ef7798e9a0353c6554f23b.png' },
-    { id: '3', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
-    { id: '4', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
-    { id: '5', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
-    { id: '6', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
+    { id: '3', name: 'Par de Helice CCW [T30]', price: 'R$520,00', installment: 'ou 12x de R$ 49,14 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/par_de_helice_ccw_t30_1037_1_46929477ab1fef17452491eda76b3a41.png' },
+    { id: '4', name: 'Bateria inteligente T40', price: 'R$17.900,00', installment: 'ou 12x de R$ 1.691,58 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/bateria_inteligente_t40_217_1_1f8a8ea702f365d569393b7e76b22d3e.png' },
+    { id: '5', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/drone_t50_dji_7_1_238d8c50a6f0203c29b50163462ec1a9.jpg' },
+    { id: '6', name: 'Bateria WB37 Agrobox [T10,T20,T30,T40,T20P,T50,T25]', price: 'R$490,00', installment: 'ou 12x de R$ 46,31 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/bateria_wb37_agrobox_t10_t20_t30_t40_t20p_t50_t25_1733_1_7917f29d0834ac7f7e395207d45b0d8f.png' },
   ];
+
+  const bannerSrc = require('../../../assets/images/homeImage.png');
+  const { width: iw, height: ih } = RNImage.resolveAssetSource(bannerSrc);
+  const bannerRatio = iw / ih;
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
@@ -176,7 +178,11 @@ export function HomeScreen() {
 
         {/* Banner Placeholder */}
         <View style={styles.bannerPlaceholder}>
-          <Image source={require('../../../assets/images/homeImage.png')} style={styles.banner} />
+          <Image
+            source={bannerSrc}
+            style={[styles.banner, { aspectRatio: bannerRatio }]}
+            resizeMode="contain"
+          />
         </View>
 
         {/* Categories Section */}
@@ -307,6 +313,7 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flexDirection: 'row',
+    opacity: 0.5,
     alignItems: 'center',
     marginHorizontal: wp('5%'),
     marginBottom: hp('2.5%'),
@@ -316,6 +323,7 @@ const styles = StyleSheet.create({
     paddingVertical: hp('1%'),
   },
   searchInput: {
+    opacity: 0.5,
     flex: 1,
     fontSize: wp('3.4%'),
     fontFamily: fonts.regular400,
@@ -329,27 +337,27 @@ const styles = StyleSheet.create({
     height: wp('6%'),
   },
   bannerPlaceholder: {
-    height: hp('28%'),
-    backgroundColor: '#D6DBDE',
+  marginBottom: hp('2.5%'),
     marginHorizontal: wp('5%'),
-    marginBottom: hp('2.5%'),
-    borderRadius: wp('8%'),
-    ...(isWeb && {
-      height: hp('54%'), // Smaller banner on web
-      marginHorizontal: wp('2%'),
-      marginBottom: hp('1.5%'),
-      marginTop: hp('8%'),
-    }),
+  overflow: 'hidden',        // keeps rounded corners on the *container*
+  // backgroundColor: '#D6DBDE',// color behind letterboxing
+  ...(isWeb && {
+    marginHorizontal: wp('2%'),
+    marginBottom: hp('1.5%'),
+    marginTop: hp('8%'),
+  }),
   },
 
   banner:{
-    width: '100%', 
-    height: '100%',
-    borderRadius: wp('3%'),
+    width: '100%',
+    height: undefined,
+    aspectRatio: 16/9,
+    maxHeight: hp('28%'),
+    marginRight: wp('%'),
+
   },
 
   categoriesSection: {
-    marginHorizontal: wp('5%'),
     marginBottom: hp('4%'),
     ...(isWeb && {
       marginHorizontal: wp('2%'),
@@ -358,6 +366,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: wp('4%'),
+    marginLeft: wp('5%'),
     fontFamily: fonts.semiBold600,
     color: '#000000',
     marginBottom: hp('2%'),
@@ -369,6 +378,8 @@ const styles = StyleSheet.create({
     }),
   },
   categoriesContainer: {
+    paddingLeft: wp('5%'),
+    paddingRight: wp('2%'),
     ...(isWeb && {
       justifyContent: 'center',
       alignItems: 'center',
@@ -386,8 +397,8 @@ const styles = StyleSheet.create({
     borderRadius: wp('5%'),
     justifyContent: 'center',
     alignItems: 'center',
-    width: wp('37.5%'),
-    height: hp('18%'),
+    width: wp('30.5%'),
+    height: hp('20%'),
     ...(isWeb && {
       height: hp('135%'), // More height for web
       width: wp('36.8%'), // Smaller width for web to fit more cards
@@ -396,11 +407,12 @@ const styles = StyleSheet.create({
   },
   categoryIcon: {
     fontSize: wp('6%'),
-    marginBottom: hp('0.25%'),
+    marginBottom: hp('1.25%'),
   },
   droneIcon:{
-    height: hp('7%'),
+    height: hp('9%'),
     width: wp('15%'),
+    marginTop: hp('2.6%'),
   },
   categoryText: {
     color: '#fff',
@@ -410,7 +422,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   featuredSection: {
-    marginHorizontal: wp('5%'),
+  //   marginHorizontal: wp('5%'),
     marginBottom: hp('12%'),
     ...(isWeb && {
       marginHorizontal: wp('2%'),
@@ -421,7 +433,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: hp('2%'),
+    marginBottom: hp('0%'),
   },
   filterContainer: {
     flexDirection: 'row',
@@ -444,6 +456,8 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   productsContainer: {
+    paddingTop: hp('2%'),
+    paddingHorizontal: wp('5%'),
     paddingBottom: hp('2.5%'),
   },
   productRow: {

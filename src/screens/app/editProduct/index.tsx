@@ -295,6 +295,7 @@ const styles = StyleSheet.create({
     ...(isWeb && { paddingVertical: hp('1.4%') }),
   },
   input: {
+    opacity: 0.5,
     fontFamily: fonts.regular400,
     fontSize: fontsizes.size16,
     color: '#000000',

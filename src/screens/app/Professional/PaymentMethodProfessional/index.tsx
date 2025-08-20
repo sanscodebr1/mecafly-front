@@ -287,6 +287,7 @@ const styles = StyleSheet.create({
     paddingVertical: hp('1%'),
   },
   inputField: {
+    opacity: 0.5,
     fontSize: wp('3.8%'),
     fontFamily: fonts.regular400,
     color: '#000000',

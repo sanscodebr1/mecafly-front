@@ -185,6 +185,7 @@ const styles = StyleSheet.create({
   },
   textInput: {
     backgroundColor: '#D6DBDE',
+    opacity: 0.5,
     borderRadius: wp('2%'),
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('1.8%'),

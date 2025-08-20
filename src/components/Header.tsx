@@ -221,6 +221,7 @@ const styles = StyleSheet.create({
     }),
   },
   webSearchInput: {
+    opacity: 0.5,
     flex: 1,
     fontSize: wp('3%'),
     fontFamily: fonts.regular400,

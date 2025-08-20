@@ -41,24 +41,28 @@ export function ProfissionaisScreen() {
     {
       id: '1',
       name: 'João da Silva',
+      image: '../../../assets/images/worker1.png',
       flightHours: '1500',
       description: 'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.',
     },
     {
       id: '2',
       name: 'Maria Santos',
+      image: '../../../assets/images/worker2.png',
       flightHours: '2200',
       description: 'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.',
     },
     {
       id: '3',
       name: 'Pedro Oliveira',
+      image: '../../../assets/images/worker3.png',
       flightHours: '1800',
       description: 'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.',
     },
     {
       id: '4',
       name: 'Ana Costa',
+      image: '../../../assets/images/worker4.png',
       flightHours: '3000',
       description: 'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.',
     },
@@ -67,7 +71,11 @@ export function ProfissionaisScreen() {
   const renderProfessionalCard = ({ item }: { item: any }) => (
     <View style={styles.professionalCard}>
       <View style={styles.cardHeader}>
-        <View style={styles.avatarPlaceholder} />
+        <View style={styles.avatarPlaceholder}>
+          <Image
+            source={require(item.image)}>
+          </Image>
+        </View>
         <Text style={styles.professionalName}>{item.name}</Text>
       </View>
       
@@ -246,6 +254,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold600,
   },
   searchContainer: {
+    opacity: 0.5,
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: wp('5%'),
@@ -262,6 +271,7 @@ const styles = StyleSheet.create({
     }),
   },
   searchInput: {
+    opacity: 0.5,
     flex: 1,
     fontSize: wp('4%'),
     fontFamily: fonts.regular400,

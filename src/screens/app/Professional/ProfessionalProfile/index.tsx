@@ -416,6 +416,7 @@ export function ProfessionalProfileScreen() {
    },
    textInput: {
     backgroundColor: '#D6DBDE',
+    opacity: 0.5,
      borderRadius: wp('2%'),
      paddingHorizontal: wp('3%'),
      paddingVertical: hp('2%'),

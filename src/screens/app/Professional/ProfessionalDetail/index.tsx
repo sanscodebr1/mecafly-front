@@ -93,14 +93,14 @@ export function ProfessionalDetailScreen() {
       name: 'Matheus',
       rating: '5,0',
       date: '24/07/2025',
-      text: 'Drone Agrícola DJI T50 ? Potência Máxima para Grandes Lavouras',
+      text: 'Profissional dedicado e experiente, recomendo a todos.',
     },
     {
       id: '2',
       name: 'Matheus',
       rating: '5,0',
       date: '24/07/2025',
-      text: 'Drone Agrícola DJI T50 ? Potência Máxima para Grandes Lavouras',
+      text: 'Ótimo profissional, recomendo!',
     },
   ];
 
@@ -125,7 +125,9 @@ export function ProfessionalDetailScreen() {
       >
         {/* Profile block */}
         <View style={styles.profileBlock}>
-          <View style={styles.avatarPlaceholder} />
+          <View style={styles.avatarPlaceholder}>
+            <Image source={require('../../../../assets/images/profiles/worker1.png')} style={{ width: '100%', height: '100%', borderRadius: wp('2%') }} />
+          </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>João da Silva</Text>
             <Text style={styles.profileMeta}>200 horas de voo realizadas</Text>
@@ -137,16 +139,17 @@ export function ProfessionalDetailScreen() {
         <View style={styles.sectionPadding}>
           <Text style={styles.sectionTitle}>Descrição</Text>
           <Text style={styles.paragraph}>
-            Drone Agrícola DJI T50 ? Potência Máxima para Grandes Lavouras{"\n"}
-            Com 50 litros de capacidade e tecnologia de ponta, o DJI T50 é o drone mais avançado do segmento. Oferece pulverização eficiente, RTK, sensores inteligentes e operação autônoma para os maiores desafios do campo brasileiro.
-          </Text>
-          <Text style={styles.paragraph}>Principais Diferenciais:</Text>
+            Piloto de drone agrícola com 2 anos de experiência atendendo soja e café. Opero drones com RTK/planejamento de rotas, priorizando segurança operacional, rastreabilidade e precisão de aplicação.
+Entrego pulverização em taxa variável, dispersão de sementes/fertilizantes e mapeamento NDVI/ortomosaico, com calibração, validação de cobertura e relatórios para tomada de decisão.
+Atuo em SP, em conformidade com ANAC/DECEA (SARPAS), seguindo checklists e avaliações de risco. Disponibilidade para janelas de plantio/saída, SLA de atendimento, nota fiscal e (opcional) seguro aeronáutico. Meu objetivo é maximizar produtividade e reduzir custos com tecnologia e execução de alto padrão.
+            </Text>
+          {/* <Text style={styles.paragraph}>Principais Diferenciais:</Text>
           <View style={styles.bulletList}>
             <Text style={styles.bulletItem}>• 50L de tanque: mais produtividade por voo.</Text>
             <Text style={styles.bulletItem}>• RTK e inteligência artificial: precisão e segurança total.</Text>
             <Text style={styles.bulletItem}>• Redução de custos operacionais e economia de insumos.</Text>
             <Text style={styles.bulletItem}>• Suporte completo e entrega rápida Agrobox.</Text>
-          </View>
+          </View> */}
         </View>
 
         {/* Culturas */}

@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Image } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { wp, hp, isWeb } from '../utils/responsive';
-import { fonts } from '../constants/fonts';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 
@@ -11,52 +11,50 @@ interface BottomTabBarProps {
 }
 
 export function BottomTabBar({ activeTab, onTabPress }: BottomTabBarProps) {
-  const navigation = useNavigation(); // 👈 Get navigation
-  if (isWeb) {
-    return null; // Don't render on web
-  }
+  const navigation = useNavigation();
+
+  if (isWeb) return null;
 
   return (
-    <View style={styles.bottomNavigation}>
-      <TouchableOpacity 
-        style={styles.navButton}
-        onPress={() => onTabPress?.('home')}
-      >
-        <Image style={styles.navIcon}  source={require('../assets/icons/homegray.png')}></Image>
+    // 👇 SafeAreaView adds the real bottom inset padding for you
+    <SafeAreaView edges={['bottom']} style={styles.wrapper}>
+      <View style={styles.bottomNavigation}>
+        <TouchableOpacity style={styles.navButton} onPress={() => onTabPress?.('home')}>
+          <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
+        </TouchableOpacity>
 
-        
-      </TouchableOpacity>
-      
-      <TouchableOpacity style={styles.centerButton} onPress={()=>navigation.navigate('Cart' as never)}>
-        <Image  style={styles.navIcon}  source={require('../assets/icons/cart.png')}></Image>
-        {/* <Text style={styles.centerButtonText}>+</Text> */}
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={styles.navButton}
-        onPress={() => onTabPress?.('profile')}
-      >
-        <Image style={styles.navIcon}  source={require('../assets/icons/persongray.png')}></Image>
+        <TouchableOpacity style={styles.centerButton} onPress={() => navigation.navigate('Cart' as never)}>
+          <Image style={styles.navIcon} source={require('../assets/icons/cart.png')} />
+        </TouchableOpacity>
 
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity style={styles.navButton} onPress={() => onTabPress?.('profile')}>
+          <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  // Absolute positioning lives on the wrapper so the inset applies to the whole bar
+  wrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#fff', // matches the bar so the inset area looks seamless
+    elevation: 12, // Android
+    zIndex: 12,    // iOS
+  },
   bottomNavigation: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     backgroundColor: '#fff',
-    paddingVertical: hp('2%'),
-    paddingHorizontal: wp('5%'),
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    paddingVertical: hp('1.5%'),        // keep small; bottom inset comes from SafeAreaView
+    paddingHorizontal: wp('5%'),
   },
   navButton: {
     alignItems: 'center',
@@ -67,7 +65,6 @@ const styles = StyleSheet.create({
   navIcon: {
     height: wp('9%'),
     width: wp('9%'),
-    color: '#000000',
   },
   centerButton: {
     width: wp('15%'),
@@ -77,9 +74,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerButtonText: {
-    color: '#fff',
-    fontSize: wp('6%'),
-    fontFamily: fonts.bold700,
-  },
-}); 
+});

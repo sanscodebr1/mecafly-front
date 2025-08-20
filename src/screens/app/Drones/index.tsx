@@ -46,12 +46,12 @@ export function DronesScreen() {
   };
 
   const products = [
-    { id: '1', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
-    { id: '2', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
-    { id: '3', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
-    { id: '4', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
-    { id: '5', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
-    { id: '6', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros' },
+    { id: '1', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/drone_t50_dji_7_1_238d8c50a6f0203c29b50163462ec1a9.jpg' },
+    { id: '2', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/drone_t50_dji_7_1_238d8c50a6f0203c29b50163462ec1a9.jpg' },
+    { id: '3', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/drone_t50_dji_7_1_238d8c50a6f0203c29b50163462ec1a9.jpg' },
+    { id: '4', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/drone_t50_dji_7_1_238d8c50a6f0203c29b50163462ec1a9.jpg' },
+    { id: '5', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/drone_t50_dji_7_1_238d8c50a6f0203c29b50163462ec1a9.jpg' },
+    { id: '6', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/drone_t50_dji_7_1_238d8c50a6f0203c29b50163462ec1a9.jpg' },
   ];
 
   const renderHeader = () => (
