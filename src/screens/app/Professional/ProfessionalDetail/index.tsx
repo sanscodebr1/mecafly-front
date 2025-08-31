@@ -15,6 +15,7 @@ import { Header } from '../../../../components/Header';
 import { BottomTabBar } from '../../../../components/BottomTabBar';
 import { useScrollAwareHeader } from '../../../../hooks/useScrollAwareHeader';
 import { fontsizes } from '../../../../constants/fontSizes';
+import { getCurrentUserProfile } from '../../../../services/userProfiles';
 
 interface PlanOption {
   id: string;
@@ -50,6 +51,8 @@ export function ProfessionalDetailScreen() {
   const [selectedCulture, setSelectedCulture] = useState<string>('Milho');
   const [selectedPlanId, setSelectedPlanId] = useState<string>('sem-equip');
   const [quantity, setQuantity] = useState<number>(1);
+  const [profileName, setProfileName] = useState<string>('');
+  const [profileEmail, setProfileEmail] = useState<string>('');
 
   const cultures = ['Milho', 'Soja', 'Café', 'Arroz', 'Feijão', 'Tomate'];
 
@@ -107,6 +110,16 @@ export function ProfessionalDetailScreen() {
   const increment = () => setQuantity(q => Math.max(1, q + 1));
   const decrement = () => setQuantity(q => Math.max(1, q - 1));
 
+  React.useEffect(() => {
+    (async () => {
+      const profile = await getCurrentUserProfile();
+      if (profile) {
+        setProfileName(profile.name || '');
+        setProfileEmail(profile.email || '');
+      }
+    })();
+  }, []);
+
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>  
       {/* Header */}
@@ -129,9 +142,12 @@ export function ProfessionalDetailScreen() {
             <Image source={require('../../../../assets/images/profiles/worker1.png')} style={{ width: '100%', height: '100%', borderRadius: wp('2%') }} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>João da Silva</Text>
+            <Text style={styles.profileName}>{profileName || 'Profissional'}</Text>
             <Text style={styles.profileMeta}>200 horas de voo realizadas</Text>
             <Text style={styles.profileLabel}>Formação:</Text>
+            {!!profileEmail && (
+              <Text style={styles.profileLabel}>{profileEmail}</Text>
+            )}
           </View>
         </View>
 

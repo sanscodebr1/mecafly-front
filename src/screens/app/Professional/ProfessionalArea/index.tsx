@@ -14,10 +14,19 @@ import { useScrollAwareHeader } from '../../../../hooks/useScrollAwareHeader';
 import { Header } from '../../../../components/Header';
 import { fonts } from '../../../../constants/fonts';
 import { Colors } from '../../../../constants/colors';
+import { getCurrentUserProfile } from '../../../../services/userProfiles';
 
 export function ProfessionalAreaScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+  const [profileName, setProfileName] = useState<string>('');
+
+  React.useEffect(() => {
+    (async () => {
+      const profile = await getCurrentUserProfile();
+      if (profile) setProfileName(profile.name || '');
+    })();
+  }, []);
 
   const handleBack = () => navigation.goBack();
 
@@ -60,7 +69,7 @@ export function ProfessionalAreaScreen() {
       >
         <View style={styles.contentContainer}>
           {/* Title */}
-          <Text style={styles.mainTitle}>Área profissional</Text>
+          <Text style={styles.mainTitle}>Área profissional{profileName ? ` - ${profileName}` : ''}</Text>
 
           {/* Professional Buttons */}
           <View style={styles.buttonsContainer}>

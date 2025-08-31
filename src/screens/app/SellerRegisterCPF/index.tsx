@@ -15,10 +15,13 @@ import { InputField } from '../../../components/InputField';
 import { TitleText } from '../../../components/TitleText';
 import { BottomButton } from '../../../components/BottomButton';
 import { Header } from '../../../components/Header';
+import { useAuth } from '../../../context/AuthContext';
+import { upsertUserProfile } from '../../../services/userProfiles';
 
 export function SellerRegisterCPFScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+  const { user } = useAuth();
   
   // Header shrinking handled by shared <Header /> using scrollY
   
@@ -40,10 +43,26 @@ export function SellerRegisterCPFScreen() {
     }));
   };
 
-  const handleContinue = () => {
-    console.log('Continue to next CPF registration step');
-    // Navigate to next CPF registration step when created
-    navigation.navigate('SellerRegisterStore');
+  const handleContinue = async () => {
+    if (!user) {
+      console.log('Usuário não autenticado');
+      return;
+    }
+    try {
+      await upsertUserProfile({
+        user_id: user.id,
+        user_type: 'seller',
+        email: formData.email,
+        name: formData.nome,
+        document: formData.cpf,
+        date_of_birth: formData.dataNascimento,
+        phone_number: formData.telefone,
+        document_picture: formData.fotoDocumento,
+      });
+      navigation.navigate('SellerRegisterStore');
+    } catch (e) {
+      console.log('Erro ao salvar perfil:', e);
+    }
   };
 
   const handleBack = () => {

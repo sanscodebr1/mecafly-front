@@ -17,10 +17,13 @@ import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 import { Header } from '../../../components/Header';
 import { InputField } from '../../../components/InputField';
 import { BottomButton } from '../../../components/BottomButton';
+import { useAuth } from '../../../context/AuthContext';
+import { upsertUserProfile } from '../../../services/userProfiles';
 
 export function SellerRegisterCNPJScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+  const { user } = useAuth();
 
   /* removed local Animated header values (headerHeight, logoScale, iconScale)
      because the shared <Header /> will receive scrollY and handle shrinking */
@@ -43,10 +46,25 @@ export function SellerRegisterCNPJScreen() {
     }));
   };
 
-  const handleContinue = () => {
-    console.log('Continue to next CNPJ registration step');
-    // Navigate to next CNPJ registration step when created
-    navigation.navigate('SellerRegisterStore' as never);
+  const handleContinue = async () => {
+    if (!user) {
+      console.log('Usuário não autenticado');
+      return;
+    }
+    try {
+      await upsertUserProfile({
+        user_id: user.id,
+        user_type: 'seller',
+        email: formData.email,
+        name: formData.razaoSocial,
+        document: formData.cnpj,
+        phone_number: formData.telefone,
+        document_picture: formData.fotoContrato,
+      });
+      navigation.navigate('SellerRegisterStore' as never);
+    } catch (e) {
+      console.log('Erro ao salvar perfil:', e);
+    }
   };
 
   const handleBack = () => {

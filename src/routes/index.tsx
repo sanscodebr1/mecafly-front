@@ -51,6 +51,8 @@ import { EditProductScreen } from "../screens/app/editProduct";
 import { DeactivateProductSuccessScreen } from "../screens/app/ProductDeactivateSuccess";
 import { MyOrdersScreen } from "../screens/app/MyOrders";
 import { OrderDetailScreen } from "../screens/app/OrderDetails";
+import { DocumentsScreen } from "../screens/app/Documents";
+import { LoginScreen } from "../screens/app/Login";
 
 // Enable native screens for better performance
 enableScreens();
@@ -105,6 +107,8 @@ export type RootStackParamList = {
   DeactivateProductSuccess: undefined;
   MyOrders: undefined;
   OrderDetails: undefined;
+  Documents: undefined;
+  Login: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -169,6 +173,8 @@ return(
             <Stack.Screen name="DeactivateProductSuccess" component={DeactivateProductSuccessScreen} options={{ title: 'Desativar Produto' }}/>
             <Stack.Screen name="MyOrders" component={MyOrdersScreen}/>
             <Stack.Screen name="OrderDetails" component={OrderDetailScreen}/>
+            <Stack.Screen name="Documents" component={DocumentsScreen}/>
+            <Stack.Screen name="Login" component={LoginScreen}/>
 
         </Stack.Navigator>
 

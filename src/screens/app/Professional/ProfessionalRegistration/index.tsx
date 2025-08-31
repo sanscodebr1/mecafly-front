@@ -15,11 +15,17 @@ import { useScrollAwareHeader } from '../../../../hooks/useScrollAwareHeader';
 import { InputField } from '../../../../components/InputField';
 import { BottomButton } from '../../../../components/BottomButton';
 import { fontsizes } from '../../../../constants/fontSizes';
+import { useAuth } from '../../../../context/AuthContext';
+import { upsertUserProfile } from '../../../../services/userProfiles';
+import { supabase } from '../../../../lib/supabaseClient';
 
 export function ProfessionalRegistrationScreen() {
   const navigation = useNavigation();
+  const { user, signUpWithEmail, signInWithEmail, refreshSession } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
+    senha: '',
+    confirmarSenha: '',
     nome: '',
     cpf: '',
     dataNascimento: '',
@@ -27,6 +33,7 @@ export function ProfessionalRegistrationScreen() {
     documento: '',
   });
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('produtos');
 
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
@@ -38,14 +45,73 @@ export function ProfessionalRegistrationScreen() {
     }));
   };
 
-  const handleContinue = () => {
+  const toISODate = (br: string) => {
+    // esperado DD/MM/AAAA -> AAAA-MM-DD
+    const parts = br.split('/');
+    if (parts.length !== 3) return '';
+    const [dd, mm, yyyy] = parts;
+    if (!dd || !mm || !yyyy) return '';
+    return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+  };
+
+  const handleContinue = async () => {
     if (!acceptTerms) {
-      // Show error message
       return;
     }
-    // Navigate to next screen
-    console.log('Professional registration data:', formData);
-    navigation.navigate('ProfessionalProfile' as never);
+    if (!formData.email || (!user && (!formData.senha || !formData.confirmarSenha))) {
+      console.log('Preencha email e senha.');
+      return;
+    }
+    if (!user && formData.senha !== formData.confirmarSenha) {
+      console.log('Senhas não conferem');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      // 1) Garantir sessão: se não autenticado, registrar e tentar logar
+      let currentUserId = user?.id;
+      if (!currentUserId) {
+        // signUp
+        const signUpRes = await signUpWithEmail(formData.email, formData.senha);
+        if (signUpRes.error) {
+          console.log('Erro no signUp:', signUpRes.error);
+          setSubmitting(false);
+          return;
+        }
+        // Alguns projetos exigem confirmação de e-mail. Tentar signIn para obter sessão.
+        const signInRes = await signInWithEmail(formData.email, formData.senha);
+        if (signInRes.error) {
+          console.log('Erro no signIn:', signInRes.error);
+          // Continua sem sessão se exigir confirmação. Upsert só funciona com sessão.
+        }
+        await refreshSession();
+      }
+
+      // Reavaliar userId após possível login
+      const { data } = await supabase.auth.getSession();
+      currentUserId = data.session?.user.id || currentUserId;
+      if (!currentUserId) {
+        console.log('Usuário não autenticado. Verifique confirmação de e-mail.');
+        setSubmitting(false);
+        return;
+      }
+
+      await upsertUserProfile({
+        user_id: currentUserId,
+        user_type: 'professional',
+        email: formData.email,
+        name: formData.nome,
+        document: formData.cpf,
+        date_of_birth: formData.dataNascimento ? toISODate(formData.dataNascimento) : null,
+        phone_number: formData.telefone,
+        document_picture: formData.documento,
+      });
+      navigation.navigate('ProfessionalProfile' as never);
+    } catch (e) {
+      console.log('Erro ao salvar cadastro profissional:', e);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDocumentPhoto = () => {
@@ -84,6 +150,24 @@ export function ProfessionalRegistrationScreen() {
             onChangeText={(value) => handleInputChange('email', value)}
             placeholder="Digite seu email"
             keyboardType="email-address"
+            autoCapitalize="none"
+          />
+
+          <InputField
+            label="Senha"
+            value={formData.senha}
+            onChangeText={(value) => handleInputChange('senha', value)}
+            placeholder="Digite sua senha"
+            secureTextEntry
+            autoCapitalize="none"
+          />
+
+          <InputField
+            label="Confirmar senha"
+            value={formData.confirmarSenha}
+            onChangeText={(value) => handleInputChange('confirmarSenha', value)}
+            placeholder="Confirme sua senha"
+            secureTextEntry
             autoCapitalize="none"
           />
 
@@ -158,7 +242,7 @@ export function ProfessionalRegistrationScreen() {
         <BottomButton 
           title="Continuar" 
           onPress={handleContinue} 
-          disabled={!acceptTerms}
+          disabled={!acceptTerms || submitting}
         />
       </View>
     </SafeAreaView>
