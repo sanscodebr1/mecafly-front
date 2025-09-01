@@ -11,22 +11,22 @@ import { useNavigation } from '@react-navigation/native';
 import { wp, hp, isWeb } from '../../../utils/responsive';
 import { fonts } from '../../../constants/fonts';
 import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
-import { InputField } from '../../../components/InputField';
-import { TitleText } from '../../../components/TitleText';
 import { BottomButton } from '../../../components/BottomButton';
 import { Header } from '../../../components/Header';
 import { useAuth } from '../../../context/AuthContext';
-import { upsertUserProfile } from '../../../services/userProfiles';
+import { supabase } from '../../../lib/supabaseClient';
+import { MaskedInputField } from '../../../components/MaskedInputField';
+import { InputField } from '../../../components/InputField';
+import { FileInputField } from '../../../components/FileInputField';
+import { unmask } from '../../../utils/masks';
+import { uploadFileToSupabase } from '../../../services/fileUpload';
 
 export function SellerRegisterCPFScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
   const { user } = useAuth();
   
-  // Header shrinking handled by shared <Header /> using scrollY
-  
   const [formData, setFormData] = useState({
-    email: '',
     nome: '',
     cpf: '',
     dataNascimento: '',
@@ -44,22 +44,48 @@ export function SellerRegisterCPFScreen() {
   };
 
   const handleContinue = async () => {
-    if (!user) {
+    if (!user?.id) {
       console.log('Usuário não autenticado');
       return;
     }
     try {
-      await upsertUserProfile({
+      // Upload do documento se houver
+      let contrato_social_url: string | null = null;
+      if (formData.fotoDocumento) {
+        contrato_social_url = await uploadFileToSupabase(
+          formData.fotoDocumento,
+          'store_profiles',
+          `contrato_social/${user.id}/`
+        );
+      }
+
+      const payload = {
         user_id: user.id,
-        user_type: 'seller',
-        email: formData.email,
-        name: formData.nome,
-        document: formData.cpf,
-        date_of_birth: formData.dataNascimento,
-        phone_number: formData.telefone,
-        document_picture: formData.fotoDocumento,
-      });
-      navigation.navigate('SellerRegisterStore');
+        status: 'pending',
+        company_type: 'individual',
+        name: formData.nome || null,
+        document: unmask(formData.cpf) || null,
+        phone: unmask(formData.telefone) || null,
+        contrato_social: contrato_social_url,
+        legal_representative: formData.nome || null,
+        cpf_legal_representative: unmask(formData.cpf) || null,
+        rg_legal_representative: null,
+        company_name: null,
+      };
+
+      const { data, error } = await supabase
+        .from('store_profile')
+        .insert([payload])
+        .select('id')
+        .single();
+
+      if (error) {
+        console.log('Erro ao criar store_profile:', error);
+        return;
+      }
+
+      console.log('Store_profile criado:', data?.id);
+      navigation.navigate('SellerRegisterStore' as never);
     } catch (e) {
       console.log('Erro ao salvar perfil:', e);
     }
@@ -71,10 +97,8 @@ export function SellerRegisterCPFScreen() {
  
   return (
     <SafeAreaView style={styles.container}>
-      {/* Shared shrinking header */}
       <Header scrollY={scrollY} onBack={handleBack} />
 
-      {/* Content */}
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -82,68 +106,47 @@ export function SellerRegisterCPFScreen() {
         scrollEventThrottle={scrollEventThrottle}
       >
         <View style={styles.contentContainer}>
-          <TitleText style={styles.mainTitle}>Cadastro vendedor | CPF</TitleText>
+          <Text style={styles.mainTitle}>Cadastro vendedor | CPF</Text>
 
-          {/* Form Fields */}
           <View style={styles.formContainer}>
-            {/* Email Field */}
-            <InputField
-              label="Email"
-              value={formData.email}
-              onChangeText={(value) => handleInputChange('email', value)}
-              placeholder="Digite seu email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-
-            {/* Nome Field */}
             <InputField
               label="Nome"
               value={formData.nome}
-              onChangeText={(value) => handleInputChange('nome', value)}
+              onChangeText={(v) => handleInputChange('nome', v)}
               placeholder="Digite seu nome completo"
               autoCapitalize="words"
             />
 
-            {/* CPF Field */}
-            <InputField
+            <MaskedInputField
               label="CPF"
-              value={formData.cpf}
-              onChangeText={(value) => handleInputChange('cpf', value)}
-              placeholder="Digite seu CPF"
-              keyboardType="numeric"
-              maxLength={14}
+              mask="cpf"
+              rawValue={formData.cpf}
+              onChangeRaw={(raw) => handleInputChange('cpf', raw)}
+              placeholder="000.000.000-00"
             />
 
-            {/* Data de nascimento Field */}
-            <InputField
+            <MaskedInputField
               label="Data de nascimento"
-              value={formData.dataNascimento}
-              onChangeText={(value) => handleInputChange('dataNascimento', value)}
+              mask="date"
+              rawValue={formData.dataNascimento}
+              onChangeRaw={(raw) => handleInputChange('dataNascimento', raw)}
               placeholder="DD/MM/AAAA"
-              keyboardType="numeric"
-              maxLength={10}
             />
 
-            {/* Telefone celular Field */}
-            <InputField
+            <MaskedInputField
               label="Telefone celular"
-              value={formData.telefone}
-              onChangeText={(value) => handleInputChange('telefone', value)}
-              placeholder="Digite seu telefone"
-              keyboardType="phone-pad"
+              mask="phone"
+              rawValue={formData.telefone}
+              onChangeRaw={(raw) => handleInputChange('telefone', raw)}
+              placeholder="(00) 00000-0000"
             />
 
-            {/* Foto do documento Field */}
-            <InputField
+            <FileInputField
               label="Foto do documento de identificação"
               value={formData.fotoDocumento}
-              onChangeText={(value) => handleInputChange('fotoDocumento', value)}
-              placeholder="Selecione a foto do documento"
-              editable={false}
+              onChange={(uri) => handleInputChange('fotoDocumento', uri)}
             />
 
-            {/* Checkbox */}
             <View style={styles.checkboxContainer}>
               <TouchableOpacity 
                 style={[styles.checkbox, aceiteTermos && styles.checkboxChecked]}
@@ -157,7 +160,6 @@ export function SellerRegisterCPFScreen() {
         </View>
       </ScrollView>
 
-      {/* Continue Button */}
       <View style={styles.buttonContainer}>
         <BottomButton title="Continuar" onPress={handleContinue} />
       </View>
@@ -166,77 +168,29 @@ export function SellerRegisterCPFScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   scrollView: {
     flex: 1,
-    ...(isWeb && {
-      marginHorizontal: wp('2%'),
-    }),
+    ...(isWeb && { marginHorizontal: wp('2%') }),
   },
   contentContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('3%'),
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('2%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('2%') }),
   },
   mainTitle: {
     fontSize: wp('6%'),
     fontFamily: fonts.bold700,
-    color: '#000000',
+    color: '#000',
     marginBottom: hp('4%'),
-    ...(isWeb && {
-      fontSize: wp('5%'),
-      marginBottom: hp('3%'),
-    }),
+    ...(isWeb && { fontSize: wp('5%'), marginBottom: hp('3%') }),
   },
-  formContainer: {
-    // Form container styles
-  },
-  inputGroup: {
-    marginBottom: hp('4%'),
-    ...(isWeb && {
-      marginBottom: hp('2%'),
-    }),
-  },
-  inputLabel: {
-    fontSize: wp('4%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    marginBottom: hp('1%'),
-    marginLeft: wp('4%'),
-    ...(isWeb && {
-      fontSize: wp('3.2%'),
-    }),
-  },
-  textInput: {
-    backgroundColor: '#D6DBDE',
-    opacity: 0.5,
-    borderRadius: wp('2%'),
-    paddingHorizontal: wp('4%'),
-    paddingVertical: hp('1.8%'),
-    fontSize: wp('4%'),
-    fontFamily: fonts.regular400,
-    color: '#000000',
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('2%'),
-      fontSize: wp('3.2%'),
-    }),
-  },
+  formContainer: {},
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: hp('2%'),
     marginBottom: hp('4%'),
-    ...(isWeb && {
-      marginTop: hp('1%'),
-      marginBottom: hp('2%'),
-    }),
   },
   checkbox: {
     width: wp('5%'),
@@ -247,53 +201,13 @@ const styles = StyleSheet.create({
     marginRight: wp('3%'),
     alignItems: 'center',
     justifyContent: 'center',
-    ...(isWeb && {
-      width: wp('4%'),
-      height: wp('4%'),
-      marginRight: wp('2%'),
-    }),
   },
-  checkboxChecked: {
-    backgroundColor: '#22D883',
-    borderColor: '#22D883',
-  },
-  checkmark: {
-    color: '#fff',
-    fontSize: wp('3%'),
-    fontFamily: fonts.bold700,
-    ...(isWeb && { fontSize: wp('2.5%') }),
-  },
-  checkboxText: {
-    fontSize: wp('4%'),
-    fontFamily: fonts.regular400,
-    color: '#000000',
-    flex: 1,
-    ...(isWeb && { fontSize: wp('3.2%') }),
-  },
+  checkboxChecked: { backgroundColor: '#22D883', borderColor: '#22D883' },
+  checkmark: { color: '#fff', fontSize: wp('3%'), fontFamily: fonts.bold700 },
+  checkboxText: { fontSize: wp('4%'), fontFamily: fonts.regular400, color: '#000', flex: 1 },
   buttonContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('3%'),
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('2%'),
-    }),
-  },
-  continueButton: {
-    backgroundColor: '#22D883',
-    borderRadius: wp('6%'),
-    paddingVertical: hp('3%'),
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...(isWeb && {
-      paddingVertical: hp('2%'),
-    }),
-  },
-  continueButtonText: {
-    color: '#fff',
-    fontSize: wp('4.5%'),
-    fontFamily: fonts.bold700,
-    ...(isWeb && {
-      fontSize: wp('3.5%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('2%') }),
   },
 });

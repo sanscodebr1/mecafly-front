@@ -21,12 +21,12 @@ import { useAuth } from '../../../../context/AuthContext';
 import { getCurrentUserProfile } from '../../../../services/userProfiles';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadUserProfileImage } from '../../../../services/storage';
+import { Picker } from '@react-native-picker/picker';
 
 export function ProfessionalProfileScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const [formData, setFormData] = useState({
-    email: '',
     nome: '',
     descricao: '',
     marca: '',
@@ -38,49 +38,30 @@ export function ProfessionalProfileScreen() {
   const [cropPrices, setCropPrices] = useState({
     Milho: '',
     Soja: '',
-    Cafe: '',
+    Café: '',
   });
-  const [equipmentCrops, setEquipmentCrops] = useState(['Milho']);
+  const [temEquipamento, setTemEquipamento] = useState<boolean | null>(null);
   const [alugarEquipamento, setAlugarEquipamento] = useState('Sim');
   const [uploading, setUploading] = useState(false);
   const [profileImageUrl, setProfileImageUrl] = useState<string | undefined>(undefined);
   const [localImageUri, setLocalImageUri] = useState<string | undefined>(undefined);
 
   const crops = ['Milho', 'Soja', 'Café'];
+  const equipamento = [
+    { id: 1, label: 'Sim', bool: true },
+    { id: 2, label: 'Não', bool: false },
+  ];
 
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
 
-  React.useEffect(() => {
-    (async () => {
-      if (!user) {
-        navigation.navigate('Home' as never);
-        return;
-      }
-      const profile = await getCurrentUserProfile();
-      if (!profile || profile.user_type !== 'professional') {
-        navigation.navigate('Home' as never);
-        return;
-      }
-      setFormData(prev => ({
-        ...prev,
-        email: profile.email || '',
-        nome: profile.name || '',
-      }));
-      setProfileImageUrl(profile.user_picture || undefined);
-    })();
-  }, [user]);
-
   const handleProfilePhoto = async () => {
     try {
-      // Primeira verificação de permissão
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
       if (permissionResult.status !== 'granted') {
         console.log('Permissão de acesso à galeria negada');
         return;
       }
 
-      // Lança o seletor de imagem usando a API antiga que ainda funciona
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -89,11 +70,8 @@ export function ProfessionalProfileScreen() {
         selectionLimit: 1,
       });
 
-      console.log('Resultado do ImagePicker:', result);
-
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        console.log('Imagem selecionada:', asset.uri);
         setLocalImageUri(asset.uri);
       }
     } catch (error) {
@@ -113,14 +91,6 @@ export function ProfessionalProfileScreen() {
       setSelectedCrops(selectedCrops.filter(c => c !== crop));
     } else {
       setSelectedCrops([...selectedCrops, crop]);
-    }
-  };
-
-  const handleEquipmentCropSelection = (crop: string) => {
-    if (equipmentCrops.includes(crop)) {
-      setEquipmentCrops(equipmentCrops.filter(c => c !== crop));
-    } else {
-      setEquipmentCrops([...equipmentCrops, crop]);
     }
   };
 
@@ -154,7 +124,7 @@ export function ProfessionalProfileScreen() {
     } finally {
       setUploading(false);
     }
-    navigation.navigate('RegistrationAnalysis' as never);
+    navigation.navigate('ProfessionalDocuments' as never);
   };
 
   const handleBack = () => navigation.goBack();
@@ -182,14 +152,12 @@ export function ProfessionalProfileScreen() {
 
         <Text style={styles.title}>Meu perfil profissional</Text>
 
+        {/* Foto */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Foto de perfil</Text>
           <TouchableOpacity 
             style={styles.profilePhotoPlaceholder} 
-            onPress={() => {
-              console.log('Clique no botão de foto detectado');
-              handleProfilePhoto();
-            }}
+            onPress={handleProfilePhoto}
             activeOpacity={0.7}
           >
             {getImageSource() ? (
@@ -200,25 +168,11 @@ export function ProfessionalProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Dados básicos */}
         <View style={styles.section}>
-          <InputField
-            label="Email"
-            value={formData.email}
-            onChangeText={(value) => handleInputChange('email', value)}
-            placeholder="Digite seu email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            containerStyle={styles.inputContainer}
-          />
+         
 
-          <InputField
-            label="Nome"
-            value={formData.nome}
-            onChangeText={(value) => handleInputChange('nome', value)}
-            placeholder="Digite seu nome"
-            autoCapitalize="words"
-            containerStyle={styles.inputContainer}
-          />
+          
 
           <InputField
             label="Descrição do perfil"
@@ -232,6 +186,7 @@ export function ProfessionalProfileScreen() {
           />
         </View>
 
+        {/* Culturas */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Culturas que atende:</Text>
           <View style={styles.cropsListContainer}>
@@ -249,22 +204,21 @@ export function ProfessionalProfileScreen() {
                   </TouchableOpacity>
 
                   {selected && (
-                    <Text numberOfLines={2} style={styles.priceHelper}>
-                      Informe o valor cobrado por hectare:
-                    </Text>
-                  )}
-
-                  {selected && (
-                    <View style={styles.priceBox}>
-                      <Text style={styles.priceCurrency}>R$</Text>
-                      <TextInput 
-                        placeholder=''
-                        value={cropPrices[crop as keyof typeof cropPrices]}
-                        onChangeText={(v) => handleCropPriceChange(crop, v)}
-                        style={styles.priceField}
-                        keyboardType="numeric"
-                      />
-                    </View>
+                    <>
+                      <Text numberOfLines={2} style={styles.priceHelper}>
+                        Informe o valor cobrado por hectare:
+                      </Text>
+                      <View style={styles.priceBox}>
+                        <Text style={styles.priceCurrency}>R$</Text>
+                        <TextInput 
+                          placeholder=''
+                          value={cropPrices[crop as keyof typeof cropPrices]}
+                          onChangeText={(v) => handleCropPriceChange(crop, v)}
+                          style={styles.priceField}
+                          keyboardType="numeric"
+                        />
+                      </View>
+                    </>
                   )}
                 </View>
               );
@@ -272,112 +226,126 @@ export function ProfessionalProfileScreen() {
           </View>
         </View>
 
+        {/* Equipamento próprio */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tem equipamento próprio:</Text>
-          <View style={styles.cropsContainer}>
-            {crops.map((crop) => (
+          <View style={styles.rentalOptionsContainer}>
+            {equipamento.map(opt => (
               <TouchableOpacity
-                key={crop}
+                key={opt.id}
                 style={[
-                  styles.cropButton,
-                  equipmentCrops.includes(crop) && styles.cropPillSelected
+                  styles.rentalPill,
+                  temEquipamento === opt.bool && styles.rentalPillSelected
                 ]}
-                onPress={() => handleEquipmentCropSelection(crop)}
+                onPress={() => setTemEquipamento(opt.bool)}
               >
                 <Text style={[
-                  styles.cropPillText,
-                  equipmentCrops.includes(crop) && styles.cropPillTextSelected
+                  styles.rentalPillText,
+                  temEquipamento === opt.bool && styles.rentalPillTextSelected
                 ]}>
-                  {crop}
+                  {opt.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {equipmentCrops.length > 0 && (
+        {/* Características só se "Sim" */}
+        {temEquipamento && (
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Quais as características do seu equipamento?</Text>
+    
+    {/* Dropdown Marca */}
+    <Text style={styles.inputLabel}>Marca</Text>
+    <View style={styles.pickerContainer}>
+      <Picker
+        selectedValue={formData.marca}
+        onValueChange={(itemValue) => handleInputChange('marca', itemValue)}
+        style={styles.picker}
+      >
+        <Picker.Item label="Selecione a marca" value="" />
+        <Picker.Item label="DJI" value="DJI" />
+        <Picker.Item label="XAG" value="XAG" />
+        <Picker.Item label="Parrot" value="Parrot" />
+        <Picker.Item label="SenseFly" value="SenseFly" />
+        <Picker.Item label="Yuneec" value="Yuneec" />
+      </Picker>
+    </View>
+
+    {/* Dropdown Capacidade */}
+    <Text style={styles.inputLabel}>Capacidade</Text>
+    <View style={styles.pickerContainer}>
+      <Picker
+        selectedValue={formData.capacidade}
+        onValueChange={(itemValue) => handleInputChange('capacidade', itemValue)}
+        style={styles.picker}
+      >
+        <Picker.Item label="Selecione a capacidade" value="" />
+        <Picker.Item label="10L" value="10L" />
+        <Picker.Item label="15L" value="15L" />
+        <Picker.Item label="20L" value="20L" />
+        <Picker.Item label="25L" value="25L" />
+        <Picker.Item label="30L" value="30L" />
+        <Picker.Item label="35L" value="35L" />
+        <Picker.Item label="40L" value="40L" />
+      </Picker>
+    </View>
+
+    <InputField
+      label="Detalhes do equipamento"
+      value={formData.detalhesEquipamento}
+      onChangeText={(value) => handleInputChange('detalhesEquipamento', value)}
+      placeholder="Descreva os detalhes do seu equipamento"
+      multiline
+      numberOfLines={4}
+      containerStyle={styles.inputContainer}
+      inputStyle={[styles.textInput, styles.textArea]}
+    />
+  </View>
+)}
+
+        {/* Aluguel do equipamento - só se temEquipamento for true */}
+        {temEquipamento && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quais as características do seu equipamento?</Text>
-            
-            <InputField
-              label="Marca"
-              value={formData.marca}
-              onChangeText={(value) => handleInputChange('marca', value)}
-              placeholder="Selecione"
-              containerStyle={styles.inputContainer}
-            />
+            <Text style={styles.sectionTitle}>Deseja alugar o seu equipamento separadamente:</Text>
+            <View style={styles.rentalOptionsContainer}>
+              {['Não', 'Sim'].map(opt => (
+                <TouchableOpacity
+                  key={opt}
+                  style={[
+                    styles.rentalPill,
+                    alugarEquipamento === opt && styles.rentalPillSelected
+                  ]}
+                  onPress={() => setAlugarEquipamento(opt)}
+                >
+                  <Text style={[
+                    styles.rentalPillText,
+                    alugarEquipamento === opt && styles.rentalPillTextSelected
+                  ]}>
+                    {opt}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-            <InputField
-              label="Capacidade"
-              value={formData.capacidade}
-              onChangeText={(value) => handleInputChange('capacidade', value)}
-              placeholder="Selecione"
-              containerStyle={styles.inputContainer}
-            />
-
-            <InputField
-              label="Detalhes do equipamento"
-              value={formData.detalhesEquipamento}
-              onChangeText={(value) => handleInputChange('detalhesEquipamento', value)}
-              placeholder="Descreva os detalhes do seu equipamento"
-              multiline
-              numberOfLines={4}
-              containerStyle={styles.inputContainer}
-              inputStyle={[styles.textInput, styles.textArea]}
-            />
+            {alugarEquipamento === 'Sim' && (
+              <View style={styles.rentalPriceSection}>
+                <Text style={styles.priceLabel}>Qual valor deseja alugar por hora:</Text>
+                <View style={styles.priceInputContainer}>
+                  <Text style={styles.priceInputLabel}>R$</Text>
+                  <InputField
+                    label=""
+                    value={formData.valorAluguel}
+                    onChangeText={(value) => handleInputChange('valorAluguel', value)}
+                    placeholder="0,00"
+                    keyboardType="numeric"
+                    containerStyle={styles.priceInputContainerInner}
+                  />
+                </View>
+              </View>
+            )}
           </View>
         )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Deseja alugar o seu equipamento separadamente:</Text>
-          <View style={styles.rentalOptionsContainer}>
-            <TouchableOpacity
-              style={[
-                styles.rentalPill,
-                alugarEquipamento === 'Não' && styles.rentalPillSelected
-              ]}
-              onPress={() => setAlugarEquipamento('Não')}
-            >
-              <Text style={[
-                styles.rentalPillText,
-                alugarEquipamento === 'Não' && styles.rentalPillTextSelected
-              ]}>
-                Não
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.rentalPill,
-                alugarEquipamento === 'Sim' && styles.rentalPillSelected
-              ]}
-              onPress={() => setAlugarEquipamento('Sim')}
-            >
-              <Text style={[
-                styles.rentalPillText,
-                alugarEquipamento === 'Sim' && styles.rentalPillTextSelected
-              ]}>
-                Sim
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {alugarEquipamento === 'Sim' && (
-            <View style={styles.rentalPriceSection}>
-              <Text style={styles.priceLabel}>Qual valor deseja alugar por hora:</Text>
-              <View style={styles.priceInputContainer}>
-                <Text style={styles.priceInputLabel}>R$</Text>
-                <InputField
-                  label=""
-                  value={formData.valorAluguel}
-                  onChangeText={(value) => handleInputChange('valorAluguel', value)}
-                  placeholder="0,00"
-                  keyboardType="numeric"
-                  containerStyle={styles.priceInputContainerInner}
-                />
-              </View>
-            </View>
-          )}
-        </View>
 
       </ScrollView>
       
@@ -389,309 +357,54 @@ export function ProfessionalProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: wp('5%'),
-    paddingVertical: hp('2%'),
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('1%') }),
-  },
-  menuButton: {
-    padding: wp('1%'),
-  },
-  menuIcon: {
-    fontSize: wp('6%'),
-    color: '#000000',
-    ...(isWeb && { fontSize: wp('4%') }),
-  },
-  logoContainer: {
-    alignItems: 'center',
-  },
-  logoImage: {
-    width: wp('35%'),
-    height: hp('13%'),
-    ...(isWeb && { width: wp('25%'), height: hp('8%') }),
-  },
-  notificationButton: {
-    width: wp('10%'),
-    height: wp('10%'),
-    borderRadius: wp('5%'),
-    backgroundColor: '#ECECEC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...(isWeb && { width: wp('8%'), height: wp('8%'), borderRadius: wp('4%') }),
-  },
-  notificationIcon: {
-    fontSize: wp('4.5%'),
-    color: '#fff',
-    ...(isWeb && { fontSize: wp('3.5%') }),
-  },
-  mainContent: {
-    flex: 1,
-    paddingHorizontal: wp('5%'),
-    paddingTop: hp('3%'),
-    ...(isWeb && { paddingHorizontal: wp('3%'), paddingTop: hp('2%') }),
-  },
-  title: {
-    textAlign: 'left',
-    fontSize: fontsizes.size24,
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    marginBottom: hp('4%'),
-    ...(isWeb && { fontSize: wp('4%'), marginBottom: hp('3%') }),
-  },
-  section: {
-    marginBottom: hp('4%'),
-    ...(isWeb && { marginBottom: hp('3%') }),
-  },
-  sectionTitle: {
-    fontSize: fontsizes.size18,
-    fontFamily: fonts.bold700,
-    textAlign: 'left',
-    color: '#000000',
-    marginBottom: hp('2%'),
-    ...(isWeb && { fontSize: wp('3.2%'), marginBottom: hp('1.5%') }),
-  },
-  profilePhotoPlaceholder: {
-    width: wp('30%'),
-    height: wp('30%'),
-    backgroundColor: '#D6DBDE',
-    borderRadius: wp('3%'),
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    overflow: 'hidden',
-    ...(isWeb && { width: wp('20%'), height: wp('20%'), borderRadius: wp('2%') }),
-  },
-  profileImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: wp('3%'),
-    ...(isWeb && { borderRadius: wp('2%') }),
-  },
-  photoPlaceholderText: {
-    fontSize: wp('8%'),
-    color: '#999',
-    fontFamily: fonts.bold700,
-    ...(isWeb && { fontSize: wp('6%') }),
-  },
-  inputContainer: {
-    marginBottom: hp('3%'),
-    ...(isWeb && { marginBottom: hp('2%') }),
-  },
+  container: { flex: 1, backgroundColor: '#fff', paddingBottom: hp('20%')  },
+  mainContent: { flex: 1, paddingHorizontal: wp('5%'), paddingTop: hp('3%'), paddingBottom: hp('10%') },
+  title: { textAlign: 'left', fontSize: fontsizes.size24, fontFamily: fonts.bold700, marginBottom: hp('4%'), color: '#000' },
+  section: { marginBottom: hp('4%') },
+  sectionTitle: { fontSize: fontsizes.size18, fontFamily: fonts.bold700, color: '#000', marginBottom: hp('2%') },
+  profilePhotoPlaceholder: { width: wp('30%'), height: wp('30%'), backgroundColor: '#D6DBDE', borderRadius: wp('3%'), alignItems: 'center', justifyContent: 'center', alignSelf: 'center', overflow: 'hidden' },
+  profileImage: { width: '100%', height: '100%' },
+  photoPlaceholderText: { fontSize: wp('8%'), color: '#999', fontFamily: fonts.bold700 },
+  inputContainer: { marginBottom: hp('3%') },
+  textInput: { backgroundColor: '#D6DBDE', opacity: 0.5, borderRadius: wp('2%'), paddingHorizontal: wp('3%'), paddingVertical: hp('2%'), fontSize: wp('3.5%'), color: '#000' },
+  textArea: { minHeight: hp('25%'), textAlignVertical: 'top' },
+  cropsListContainer: { marginBottom: hp('2%') },
+  cropRow: { flexDirection: 'row', alignItems: 'center', gap: wp('3%'), marginBottom: hp('2.5%') },
+  cropPill: { backgroundColor: '#D6DBDE', borderRadius: wp('7%'), paddingHorizontal: wp('5%'), paddingVertical: hp('1.3%'), minWidth: wp('22%'), alignItems: 'center' },
+  cropPillSelected: { backgroundColor: '#22D883' },
+  cropPillText: { fontSize: wp('3.5%'), fontFamily: fonts.regular400, color: '#666' },
+  cropPillTextSelected: { color: '#fff' },
+  priceHelper: { flex: 1, fontSize: wp('3.1%'), fontFamily: fonts.regular400, color: '#000' },
+  priceBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E6E6E6', borderRadius: wp('3%'), paddingHorizontal: wp('3%'), minWidth: wp('28%') },
+  priceCurrency: { fontSize: wp('3.5%'), fontFamily: fonts.regular400, color: '#000', marginRight: wp('2%') },
+  priceField: { paddingVertical: hp('1%'), fontSize: wp('3.5%'), fontFamily: fonts.regular400, color: '#000' },
+  rentalOptionsContainer: { flexDirection: 'row', gap: wp('3%'), marginBottom: hp('2%') },
+  rentalPill: { backgroundColor: '#D6DBDE', flex: 1, borderRadius: wp('3%'), paddingVertical: hp('1.5%'), alignItems: 'center' },
+  rentalPillSelected: { backgroundColor: '#22D883' },
+  rentalPillText: { fontSize: wp('3.5%'), fontFamily: fonts.regular400, color: '#666' },
+  rentalPillTextSelected: { color: '#fff', fontFamily: fonts.bold700 },
+  rentalPriceSection: { marginTop: hp('2%') },
+  priceLabel: { fontSize: fontsizes.size16, fontFamily: fonts.regular400, color: '#000' },
+  priceInputContainer: { flexDirection: 'row', alignItems: 'center' },
+  priceInputContainerInner: { flex: 1 },
+  priceInputLabel: { fontSize: wp('3.5%'), fontFamily: fonts.bold700, color: '#000', marginRight: wp('2%') },
+  fixedButtonContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', padding: wp('5%'), borderTopWidth: 1, borderTopColor: '#f0f0f0' },
   inputLabel: {
-    fontSize: wp('3.5%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    marginBottom: hp('1%'),
-    ...(isWeb && { fontSize: wp('2.8%'), marginBottom: hp('0.5%') }),
-  },
-  textInput: {
-    backgroundColor: '#D6DBDE',
-    opacity: 0.5,
-    borderRadius: wp('2%'),
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
-    fontSize: wp('3.5%'),
-    fontFamily: fonts.regular400,
-    color: '#000000',
-    ...(isWeb && { 
-      paddingHorizontal: wp('2%'), 
-      paddingVertical: hp('1.5%'),
-      fontSize: wp('2.8%') 
-    }),
-  },
-  textArea: {
-    minHeight: hp('25%'),
-    textAlignVertical: 'top',
-    ...(isWeb && { minHeight: hp('8%') }),
-  },
-  cropsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: wp('2%'),
-    marginBottom: hp('2%'),
-    ...(isWeb && { gap: wp('1.5%'), marginBottom: hp('1.5%') }),
-  },
-  cropsListContainer: {
-    marginBottom: hp('2%'),
-    ...(isWeb && { marginBottom: hp('1.5%') }),
-  },
-  cropRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: wp('3%'),
-    marginBottom: hp('2.5%'),
-  },
-  cropPill: {
-    backgroundColor: '#D6DBDE',
-    borderRadius: wp('7%'),
-    paddingHorizontal: wp('5%'),
-    paddingVertical: hp('1.3%'),
-    minWidth: wp('22%'),
-    alignItems: 'center',
-  },
-  cropPillSelected: {
-    backgroundColor: '#22D883',
-  },
-  cropPillText: {
-    fontSize: wp('3.5%'),
-    fontFamily: fonts.regular400,
-    color: '#666',
-    ...(isWeb && { fontSize: wp('2.8%') }),
-  },
-  cropButton: {
-    backgroundColor: '#D6DBDE',
-    borderRadius: wp('2%'),
-    paddingHorizontal: wp('5%'),
-    paddingVertical: hp('1.3%'),
-    minWidth: wp('28.6%'),
-    alignItems: 'center',
-  },
-  priceHelper: {
-    flex: 1,
-    fontSize: wp('3.1%'),
-    fontFamily: fonts.regular400,
-    color: '#000000',
-  },
-  priceBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E6E6E6',
-    borderRadius: wp('3%'),
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('0.0%'),
-    minWidth: wp('28%'),
-  },
-  priceCurrency: {
-    fontSize: wp('3.5%'),
-    fontFamily: fonts.regular400,
-    color: '#000000',
-    marginRight: wp('2%'),
-  },
-  priceField: {
-    paddingVertical: hp('1%'),
-    fontSize: wp('3.5%'),
-    fontFamily: fonts.regular400,
-    marginVertical: 0,
-    marginTop: 0,
-    color: '#000000',
-  },
-  cropPillTextSelected: {
-    color: '#fff',
-  },
-  priceSection: {
-    marginTop: hp('2%'),
-    ...(isWeb && { marginTop: hp('1.5%') }),
-  },
-  priceInputRow: {
-    flex: 1,
-    marginLeft: wp('3%'),
-    ...(isWeb && { marginLeft: wp('2%') }),
-  },
-  priceLabel: {
-    marginTop: hp('-10%'),
     fontSize: fontsizes.size16,
-    fontFamily: fonts.regular400,
-    color: '#000000',
-    ...(isWeb && { fontSize: wp('2.8%'), marginBottom: hp('1.5%') }),
-  },
-  priceInputContainer: {
-    marginBottom: hp('12%'),
-    flexDirection: 'row',
-    alignItems: 'center',
-    ...(isWeb && { marginBottom: hp('1.5%') }),
-  },
-  priceInputContainerInner: {
-    flex: 1,
-    marginLeft: 0,
-    padding: 0,
-    backgroundColor: 'transparent',
-  },
-  priceBoxInputContainer: {
-    marginLeft: 0,
-    padding: 0,
-    backgroundColor: 'transparent',
-  },
-  rentalOptionsContainer: {
-    flexDirection: 'row',
-    gap: wp('3%'),
-    marginBottom: hp('2%'),
-    ...(isWeb && { gap: wp('2%'), marginBottom: hp('1.5%') }),
-  },
-  rentalPill: {
-    backgroundColor: '#D6DBDE',
-    width: wp('43%'),
-    borderRadius: wp('3%'),
-    paddingHorizontal: wp('6%'),
-    paddingVertical: hp('1.5%'),
-    marginBottom: hp('12%'),
-    ...(isWeb && { 
-      paddingHorizontal: wp('4%'), 
-      paddingVertical: hp('1%') 
-    }),
-  },
-  rentalPillSelected: {
-    backgroundColor: '#22D883',
-  },
-  rentalPillText: {
-    fontSize: wp('3.5%'),
-    textAlign: 'center',
-    fontFamily: fonts.regular400,
-    color: '#666',
-    ...(isWeb && { fontSize: wp('2.8%') }),
-  },
-  rentalPillTextSelected: {
-    color: '#fff',
-    fontFamily: fonts.bold700,
-  },
-  rentalPriceSection: {
+    fontFamily: fonts.semiBold600,
+    color: '#000',
+    marginBottom: hp('1%'),
     marginTop: hp('2%'),
-    ...(isWeb && { marginTop: hp('1.5%') }),
   },
-  buttonContainer: {
-    marginTop: hp('4%'),
-    marginBottom: hp('4%'),
-    ...(isWeb && { marginTop: hp('3%'), marginBottom: hp('3%') }),
+  pickerContainer: {
+    backgroundColor: '#D6DBDE',
+    borderRadius: wp('2%'),
+    marginBottom: hp('3%'),
+    overflow: 'hidden',
   },
-  fixedButtonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    paddingHorizontal: wp('5%'),
-    paddingVertical: hp('2%'),
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    ...(isWeb && { position: 'relative', paddingHorizontal: wp('3%'), paddingVertical: hp('1.5%'), borderTopWidth: 0 }),
-  },
-  continueButton: {
-    backgroundColor: '#22D883',
-    borderRadius: wp('3%'),
-    paddingVertical: hp('3%'),
-    alignItems: 'center',
-    ...(isWeb && { paddingVertical: hp('2%') }),
-  },
-  continueButtonText: {
-    fontSize: wp('4%'),
-    fontFamily: fonts.bold700,
-    color: '#fff',
-    ...(isWeb && { fontSize: wp('3.2%') }),
-  },
-  priceInputLabel: {
-    fontSize: wp('3.5%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    marginRight: wp('2%'),
-    ...(isWeb && { fontSize: wp('2.8%'), marginRight: wp('1.5%') }),
-  },
+  picker: {
+    width: '100%',
+    color: '#000',
+  }
+
 });

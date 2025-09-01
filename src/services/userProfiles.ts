@@ -61,17 +61,41 @@ export async function upsertUserProfile(profile: UserProfile) {
   return data as UserProfile;
 }
 
+
+
 export async function getCurrentUserProfile() {
   const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user.id;
-  if (!userId) return null;
-  const { data, error } = await supabase
+  const user = sessionData.session?.user;
+  if (!user) return null;
+
+  // buscar user_profiles
+  const { data: profiles, error: errorProfiles } = await supabase
     .from('user_profiles')
     .select('*')
-    .eq('user_id', userId)
-    .single();
-  if (error) return null;
-  return data as UserProfile | null;
-}
+    .eq('user_id', user.id);
 
+  if (errorProfiles) {
+    console.error('Erro ao buscar user_profiles:', errorProfiles);
+  }
+
+  // buscar store_profiles
+  const { data: stores, error: errorStores } = await supabase
+    .from('store_profile')
+    .select('*')
+    .eq('user_id', user.id);
+
+  if (errorStores) {
+    console.error('Erro ao buscar store_profiles:', errorStores);
+  }
+
+  const result = {
+    id: user.id,
+    email: user.email,
+    user_profiles: (profiles ?? []) as UserProfile[],
+    store_profiles: (stores ?? []) as StoreProfile[], // novo
+  };
+
+  console.log('Dados do perfil:', result);
+  return result;
+}
 

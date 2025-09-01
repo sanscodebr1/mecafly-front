@@ -80,10 +80,8 @@ export function ProfissionaisScreen() {
     },
   ];
 
-    const bannerSrc = require('../../../../assets/images/homeImage.png');
-    const { width: iw, height: ih } = RNImage.resolveAssetSource(bannerSrc);
-    const bannerRatio = iw / ih;
-  
+  const bannerSrc = require('../../../../assets/images/homeImage.png');
+
 
   const renderProfessionalCard = ({ item }: { item: any }) => (
     <View style={styles.professionalCard}>
@@ -133,10 +131,10 @@ export function ProfissionaisScreen() {
       
               <View style={styles.bannerPlaceholder}>
                 <Image
-                  source={bannerSrc}
-                  style={[styles.banner, { aspectRatio: bannerRatio }]}
-                  resizeMode="contain"
-                />
+  source={bannerSrc}
+  style={styles.banner}
+  resizeMode="contain"
+/>
               </View>
 
       {/* Professionals Section Header */}

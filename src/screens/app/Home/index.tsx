@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
-import { Image as RNImage } from 'react-native';
 import {
   View,
   Text,
@@ -12,7 +11,7 @@ import {
   FlatList,
   Animated,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { fonts } from '../../../constants/fonts';
@@ -28,10 +27,8 @@ export function HomeScreen() {
   const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('produtos');
   const [activeFilter, setActiveFilter] = useState<'todos' | 'drones' | 'control'>('todos');
   const [activeBottomTab, setActiveBottomTab] = useState('home');
-  
-  const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
-  
 
+  const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
 
   const handleDronesPress = () => {
     navigation.navigate('Drones' as never);
@@ -50,20 +47,18 @@ export function HomeScreen() {
 
   const handleBottomTabPress = (tab: string) => {
     setActiveBottomTab(tab);
-    // Add navigation logic here if needed
     if (tab === 'profile') {
-      // Navigate to profile screen
       // navigation.navigate('Profile' as never);
     }
   };
 
-    const categories = [
-      { id: '1', name: 'Drones agras', icon: require('../../../assets/images/categories/drones.png') },
-      { id: '2', name: 'Baterias', icon: require('../../../assets/images/categories/baterias.png') },
-      { id: '3', name: 'Acessórios', icon: require('../../../assets/images/categories/acessorios.png') },
-      { id: '4', name: 'Partes e peças', icon: require('../../../assets/images/categories/partes.png') },
-      { id: '5', name: 'Geradores', icon: require('../../../assets/images/categories/geradores.png') },
-      { id: '6', name: 'Drones Consumer', icon: require('../../../assets/images/categories/dronesconsumer.png') },
+  const categories = [
+    { id: '1', name: 'Drones agras', icon: require('../../../assets/images/categories/drones.png') },
+    { id: '2', name: 'Baterias', icon: require('../../../assets/images/categories/baterias.png') },
+    { id: '3', name: 'Acessórios', icon: require('../../../assets/images/categories/acessorios.png') },
+    { id: '4', name: 'Partes e peças', icon: require('../../../assets/images/categories/partes.png') },
+    { id: '5', name: 'Geradores', icon: require('../../../assets/images/categories/geradores.png') },
+    { id: '6', name: 'Drones Consumer', icon: require('../../../assets/images/categories/dronesconsumer.png') },
   ];
 
   const renderCategoryItem = ({ item }: { item: any }) => (
@@ -90,77 +85,46 @@ export function HomeScreen() {
   ];
 
   const bannerSrc = require('../../../assets/images/homeImage.png');
-  const { width: iw, height: ih } = RNImage.resolveAssetSource(bannerSrc);
-  const bannerRatio = iw / ih;
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
       {/* Header */}
-      <Header 
+      <Header
         activeTab={activeTab}
         onTabPress={handleTabPress}
         scrollY={scrollY}
       />
 
-      {/* Mobile: Navigation Tabs */}
-      
-
-      <Animated.ScrollView 
-        style={styles.scrollView} 
+      <Animated.ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
       >
+        {!isWeb && (
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'produtos' && styles.activeTab]}
+              onPress={() => handleTabPress('produtos')}
+            >
+              <Text style={[styles.tabText, activeTab === 'produtos' && styles.activeTabText]}>
+                Produtos
+              </Text>
+            </TouchableOpacity>
 
-      {/* {!isWeb && (
-        <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'produtos' && styles.activeTab]}
-            onPress={() => handleTabPress('produtos')}
-          >
-            <Text style={[styles.tabText, activeTab === 'produtos' && styles.activeTabText]}>
-              Produtos
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'profissionais' && styles.activeTab]}
-            onPress={() => handleTabPress('profissionais')}
-          >
-            <Text style={[styles.tabText, activeTab === 'profissionais' && styles.activeTabText]}>
-              Profissionais
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )} */}
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'profissionais' && styles.activeTab]}
+              onPress={() => handleTabPress('profissionais')}
+            >
+              <Text style={[styles.tabText, activeTab === 'profissionais' && styles.activeTabText]}>
+                Profissionais
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-      {!isWeb && (
-        
-
-      
-     <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'produtos' && styles.activeTab]}
-            onPress={() => handleTabPress('produtos')}
-          >
-            <Text style={[styles.tabText, activeTab === 'produtos' && styles.activeTabText]}>
-              Produtos
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'profissionais' && styles.activeTab]}
-            onPress={() => handleTabPress('profissionais')}
-          >
-            <Text style={[styles.tabText, activeTab === 'profissionais' && styles.activeTabText]}>
-              Profissionais
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-)}
-         {/* Mobile: Search Bar */}
-         {!isWeb && (
+        {/* Mobile: Search Bar */}
+        {!isWeb && (
           <View style={styles.searchContainer}>
             <TextInput
               style={styles.searchInput}
@@ -168,19 +132,19 @@ export function HomeScreen() {
               placeholderTextColor="#000"
             />
             <TouchableOpacity style={styles.searchIcon}>
-                      <Image
-                        source={require('../../../assets/icons/search.png')}
-                        style={styles.searchIconText}
-                      />
+              <Image
+                source={require('../../../assets/icons/search.png')}
+                style={styles.searchIconText}
+              />
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Banner Placeholder */}
+        {/* Banner */}
         <View style={styles.bannerPlaceholder}>
           <Image
             source={bannerSrc}
-            style={[styles.banner, { aspectRatio: bannerRatio }]}
+            style={styles.banner}
             resizeMode="contain"
           />
         </View>
@@ -199,56 +163,50 @@ export function HomeScreen() {
         </View>
 
         {/* Featured Products Section */}
-        
         {isWeb && (
-        <Text style={styles.sectionTitle}>Destaques</Text>
+          <Text style={styles.sectionTitle}>Destaques</Text>
         )}
 
-        
         <View style={styles.featuredSection}>
-         
+          {!isWeb && (
+            <View style={styles.featuredHeader}>
+              <Text style={styles.sectionTitle}>Destaques</Text>
+              <View style={styles.filterContainer}>
+                <TouchableOpacity
+                  style={[styles.filterButton, activeFilter === 'todos' && styles.activeFilter]}
+                  onPress={() => setActiveFilter('todos')}
+                >
+                  <Text style={[styles.filterText, activeFilter === 'todos' && styles.activeFilterText]}>
+                    Todos
+                  </Text>
+                </TouchableOpacity>
 
-         {!isWeb &&(
+                <TouchableOpacity
+                  style={[styles.filterButton, activeFilter === 'drones' && styles.activeFilter]}
+                  onPress={() => setActiveFilter('drones')}
+                >
+                  <Text style={[styles.filterText, activeFilter === 'drones' && styles.activeFilterText]}>
+                    Drones
+                  </Text>
+                </TouchableOpacity>
 
-          <View style={styles.featuredHeader}>
-          <Text style={styles.sectionTitle}>Destaques</Text>
-          <View style={styles.filterContainer}>
-            <TouchableOpacity 
-              style={[styles.filterButton, activeFilter === 'todos' && styles.activeFilter]}
-              onPress={() => setActiveFilter('todos')}
-            >
-              <Text style={[styles.filterText, activeFilter === 'todos' && styles.activeFilterText]}>
-                Todos
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.filterButton, activeFilter === 'drones' && styles.activeFilter]}
-              onPress={() => setActiveFilter('drones')}
-            >
-              <Text style={[styles.filterText, activeFilter === 'drones' && styles.activeFilterText]}>
-                Drones
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.filterButton, activeFilter === 'control' && styles.activeFilter]}
-              onPress={() => setActiveFilter('control')}
-            >
-              <Text style={[styles.filterText, activeFilter === 'control' && styles.activeFilterText]}>
-                Control
-              </Text>
-            </TouchableOpacity>
-          </View>
-          </View>
-         )}
-          
+                <TouchableOpacity
+                  style={[styles.filterButton, activeFilter === 'control' && styles.activeFilter]}
+                  onPress={() => setActiveFilter('control')}
+                >
+                  <Text style={[styles.filterText, activeFilter === 'control' && styles.activeFilterText]}>
+                    Control
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* Products Grid */}
           <FlatList
             data={products}
             renderItem={({ item: product }) => (
-              <ProductCard 
+              <ProductCard
                 product={product}
                 onPress={handleProductPress}
               />
@@ -264,10 +222,10 @@ export function HomeScreen() {
       </Animated.ScrollView>
 
       {/* Bottom Navigation - Only show on mobile */}
-      <BottomTabBar 
+     {/* <BottomTabBar
         activeTab={activeBottomTab}
         onTabPress={handleBottomTabPress}
-      />
+      /> */}
     </SafeAreaView>
   );
 }
@@ -275,7 +233,7 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',  
+    backgroundColor: '#fff',
   },
 
   tabContainer: {
@@ -306,7 +264,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    // marginHorizontal: wp('10%'),
     ...(isWeb && {
       marginHorizontal: wp('0%'),
     }),
@@ -337,31 +294,29 @@ const styles = StyleSheet.create({
     height: wp('6%'),
   },
   bannerPlaceholder: {
-  marginBottom: hp('2.5%'),
+    marginBottom: hp('2.5%'),
     marginHorizontal: wp('5%'),
-  overflow: 'hidden',        // keeps rounded corners on the *container*
-  // backgroundColor: '#D6DBDE',// color behind letterboxing
-  ...(isWeb && {
-    marginHorizontal: wp('2%'),
-    marginBottom: hp('1.5%'),
-    marginTop: hp('8%'),
-  }),
+    overflow: 'hidden',
+    ...(isWeb && {
+      marginHorizontal: wp('2%'),
+      marginBottom: hp('1.5%'),
+      marginTop: hp('8%'),
+    }),
   },
 
-  banner:{
+  banner: {
     width: '100%',
     height: undefined,
-    aspectRatio: 16/9,
+    aspectRatio: 16 / 9,
     maxHeight: hp('28%'),
     marginRight: wp('%'),
-
   },
 
   categoriesSection: {
     marginBottom: hp('4%'),
     ...(isWeb && {
       marginHorizontal: wp('2%'),
-      marginBottom: hp('2%'), // Less spacing on web
+      marginBottom: hp('2%'),
     }),
   },
   sectionTitle: {
@@ -371,8 +326,8 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: hp('2%'),
     ...(isWeb && {
-      textAlign: 'center' as any, // Center titles on web
-      fontSize: wp('4%'), // Smaller font size for web
+      textAlign: 'center' as any,
+      fontSize: wp('4%'),
       marginBottom: hp('6%'),
       marginTop: hp('6%'),
     }),
@@ -388,7 +343,7 @@ const styles = StyleSheet.create({
   categoryCardContainer: {
     marginRight: wp('3%'),
     ...(isWeb && {
-      marginRight: wp('1%'), // Smaller spacing between cards on web
+      marginRight: wp('1%'),
     }),
   },
   categoryCard: {
@@ -400,8 +355,8 @@ const styles = StyleSheet.create({
     width: wp('30.5%'),
     height: hp('20%'),
     ...(isWeb && {
-      height: hp('135%'), // More height for web
-      width: wp('36.8%'), // Smaller width for web to fit more cards
+      height: hp('135%'),
+      width: wp('36.8%'),
       paddingVertical: hp('12%'),
     }),
   },
@@ -409,7 +364,7 @@ const styles = StyleSheet.create({
     fontSize: wp('6%'),
     marginBottom: hp('1.25%'),
   },
-  droneIcon:{
+  droneIcon: {
     height: hp('9%'),
     width: wp('15%'),
     marginTop: hp('2.6%'),
@@ -422,11 +377,10 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   featuredSection: {
-  //   marginHorizontal: wp('5%'),
     marginBottom: hp('12%'),
     ...(isWeb && {
       marginHorizontal: wp('2%'),
-      marginBottom: hp('4%'), // Less spacing on web
+      marginBottom: hp('4%'),
     }),
   },
   featuredHeader: {
@@ -450,7 +404,8 @@ const styles = StyleSheet.create({
   filterText: {
     fontSize: wp('3%'),
     fontFamily: fonts.medium500,
-    color: '#000000',borderRadius:10
+    color: '#000000',
+    borderRadius: 10,
   },
   activeFilterText: {
     color: '#fff',
@@ -464,5 +419,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: wp('4%'),
   },
-
 });

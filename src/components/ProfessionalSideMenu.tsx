@@ -17,6 +17,7 @@ import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useUserType } from '../hooks/useUserType';
 
+
 interface ProfessionalSideMenuProps {
   isVisible: boolean;
   onClose: () => void;
@@ -24,11 +25,18 @@ interface ProfessionalSideMenuProps {
 
 export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMenuProps) {
   const navigation = useNavigation();
-  const { user } = useAuth();
-  const { isProfessional, isLoggedIn } = useUserType();
+  const { user, signOut } = useAuth();
+  const { isProfessional, isSeller, isLoggedIn } = useUserType();
   const [showMenuOptions, setShowMenuOptions] = useState(false);
   const slideAnim = React.useRef(new Animated.Value(-wp('80%'))).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  
+// rótulos e ações dos CTAs dinâmicos
+const sellerCtaLabel = isSeller ? 'Área do Vendedor' : 'Tornar-se um Vendedor';
+const sellerCtaNavigateTo = isSeller ? 'SellerArea' : 'SellerRegistration';
+
+const professionalCtaLabel = isProfessional ? 'Área do Profissional' : 'Tornar-se um Profissional';
+const professionalCtaNavigateTo = isProfessional ? 'ProfessionalArea' : 'ProfessionalRegistration';
 
   React.useEffect(() => {
     if (isVisible) {
@@ -87,145 +95,115 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
 
   return (
     <View style={styles.container}>
-      {/* Backdrop */}
-      <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]} onTouchEnd={onClose} />
+    {/* Backdrop */}
+    <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]} onTouchEnd={onClose} />
 
-      {/* Menu Content */}
-      <Animated.View style={[styles.menuContainer, { transform: [{ translateX: slideAnim }] }]}>
-        {/* Header with Logo and Hamburger */}
-        <View style={styles.menuHeader}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('../assets/images/logo.png')}
-              style={styles.menuLogo}
-              resizeMode="contain"
-            />
-          </View>
-
-          <TouchableOpacity style={styles.hamburgerButton} onPress={onClose}>
-            <Text style={styles.hamburgerIcon}>☰</Text>
-          </TouchableOpacity>
+    {/* Menu Content */}
+    <Animated.View style={[styles.menuContainer, { transform: [{ translateX: slideAnim }] }]}>
+      {/* Header with Logo and Hamburger */}
+      <View style={styles.menuHeader}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../assets/images/logo.png')}
+            style={styles.menuLogo}
+            resizeMode="contain"
+          />
         </View>
 
-        {/* Content */}
-        {!isLoggedIn ? (
-          <View style={styles.loginSection}>
-            <TouchableOpacity style={styles.loginButton} onPress={handleLoginPress}>
-              <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
-              <Text style={styles.loginText}>Login/Cadastre-se</Text>
-            </TouchableOpacity>
-          </View>
-        ) : isProfessional ? (
-          
-          <View style={styles.menuOptionsSection}>
-            {/* Highlighted profile button */}
-            <TouchableOpacity
-              style={styles.profileButton}
-              onPress={() => navigation.navigate('MyProfiles' as never)}
-            >
-              <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
-              <Text style={styles.profileButtonText}>Meu Perfil</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.hamburgerButton} onPress={onClose}>
+          <Text style={styles.hamburgerIcon}>☰</Text>
+        </TouchableOpacity>
+      </View>
 
-            {/* Options */}
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={handleMeusDadosPress}
-            >
-              <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
-              <Text style={styles.menuOptionText}>Meus Dados</Text>
-            </TouchableOpacity>
+     {!isLoggedIn ? (
+  // NÃO logado
+  <View style={styles.loginSection}>
+    <TouchableOpacity style={styles.loginButton} onPress={handleLoginPress}>
+      <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
+      <Text style={styles.loginText}>Login/Cadastre-se</Text>
+    </TouchableOpacity>
+  </View>
+) : (
+  // LOGADO
+  <View style={styles.menuOptionsSection}>
+    {/* Botão de perfil */}
+    <TouchableOpacity
+      style={styles.menuOption}
+      onPress={() => navigation.navigate('MyProfiles' as never)}
+    >
+      <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
+      <Text style={styles.menuOptionText}>Meu Perfil</Text>
+    </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => navigation.navigate('MyAddresses' as never)}
-            >
-              <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
-              <Text style={styles.menuOptionText}>Meus Endereços</Text>
-            </TouchableOpacity>
+    {/* Opções comuns */}
+    <TouchableOpacity style={styles.menuOption} onPress={handleMeusDadosPress}>
+      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+      <Text style={styles.menuOptionText}>Meus Dados</Text>
+    </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => navigation.navigate('MyContracts' as never)}
-            >
-              <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
-              <Text style={styles.menuOptionText}>Minhas contratações</Text>
-            </TouchableOpacity>
+    <TouchableOpacity
+      style={styles.menuOption}
+      onPress={() => navigation.navigate('MyAddresses' as never)}
+    >
+      <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
+      <Text style={styles.menuOptionText}>Meus Endereços</Text>
+    </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => navigation.navigate('Documents' as never)}
-            >
-              <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
-              <Text style={styles.menuOptionText}>Documentos</Text>
-            </TouchableOpacity>
+    <TouchableOpacity
+      style={styles.menuOption}
+      onPress={() => navigation.navigate('MyContracts' as never)}
+    >
+      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+      <Text style={styles.menuOptionText}>Minhas contratações</Text>
+    </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => navigation.navigate('ChangePassword' as never)}
-            >
-              <Image style={styles.navIcon} source={require('../assets/icons/keygray.png')} />
-              <Text style={styles.menuOptionText}>Alterar Senha</Text>
-            </TouchableOpacity>
+    <TouchableOpacity
+      style={styles.menuOption}
+      onPress={() => navigation.navigate('Documents' as never)}
+    >
+      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+      <Text style={styles.menuOptionText}>Documentos</Text>
+    </TouchableOpacity>
 
-            {/* Gradient actions */}
-            <View style={styles.gradientButtonsContainer}>
-              <TouchableOpacity
-                style={styles.gradientButton}
-                onPress={() => navigation.navigate('SellerArea' as never)}
-              >
-                <LinearGradient
-                  colors={['#000000', Colors.primaryRed]}
-                  style={styles.gradientButtonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                >
-                  <Text style={styles.gradientButtonText}>Tornar-se um Vendedor</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+    <TouchableOpacity
+      style={styles.menuOption}
+      onPress={() => navigation.navigate('ChangePassword' as never)}
+    >
+      <Image style={styles.navIcon} source={require('../assets/icons/keygray.png')} />
+      <Text style={styles.menuOptionText}>Alterar Senha</Text>
+    </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.gradientButton}
-                onPress={() => navigation.navigate('ProfessionalRegistration' as never)}
-              >
-                <LinearGradient
-                  colors={['#000000', Colors.primaryRed]}
-                  style={styles.gradientButtonGradient}
-                  start={{ x: 0, y: 1 }}
-                  end={{ x: 0, y: 0 }}
-                >
-                  <Text style={styles.gradientButtonText}>Tornar-se um Profissional</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+    {/* Dinâmicos: vendedor / profissional */}
+    <TouchableOpacity
+      style={styles.menuOption}
+      onPress={() => navigation.navigate(isSeller ? 'SellerArea' as never : 'SellerRegister' as never)}
+    >
+      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+      <Text style={styles.menuOptionText}>
+        {isSeller ? 'Área do Vendedor' : 'Tornar-se um Vendedor'}
+      </Text>
+    </TouchableOpacity>
 
-            <TouchableOpacity style={styles.backButton} onPress={handleBackToLogin}>
-              <Text style={styles.backButtonText}>← Voltar</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          // Usuário logado mas não é profissional
-          <View style={styles.menuOptionsSection}>
-            <Text style={styles.accessDeniedText}>
-              Acesso restrito apenas para profissionais
-            </Text>
-            <TouchableOpacity 
-              style={styles.gradientButton}
-              onPress={() => navigation.navigate('ProfessionalRegistration' as never)}
-            >
-              <LinearGradient
-                colors={['#000000', Colors.primaryRed]}
-                style={styles.gradientButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-              >
-                <Text style={styles.gradientButtonText}>Tornar-se um Profissional</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        )}
-      </Animated.View>
-    </View>
+    <TouchableOpacity
+      style={styles.menuOption}
+      onPress={() => navigation.navigate(isProfessional ? 'ProfessionalArea' as never : 'ProfessionalRegistration' as never)}
+    >
+      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+      <Text style={styles.menuOptionText}>
+        {isProfessional ? 'Área do Profissional' : 'Tornar-se um Profissional'}
+      </Text>
+    </TouchableOpacity>
+
+    {/* Logout */}
+    <TouchableOpacity style={styles.menuOption} onPress={signOut}>
+      <Image style={styles.navIcon} source={require('../assets/icons/keygray.png')} />
+      <Text style={styles.menuOptionText}>Sair</Text>
+    </TouchableOpacity>
+  </View>
+)}
+
+    </Animated.View>
+  </View>
   );
 }
 

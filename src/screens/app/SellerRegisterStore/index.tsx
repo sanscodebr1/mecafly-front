@@ -14,18 +14,19 @@ import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 import { Header } from '../../../components/Header';
 import { InputField } from '../../../components/InputField';
 import { BottomButton } from '../../../components/BottomButton';
+import { FileInputField } from '../../../components/FileInputField';
+import { useAuth } from '../../../context/AuthContext';
+import { supabase } from '../../../lib/supabaseClient';
+import { uploadFileToSupabase } from '../../../services/fileUpload';
 
 export function SellerRegisterStoreScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+  const { user } = useAuth();
 
   const [formData, setFormData] = useState({
     nome: '',
-    razaoSocial: '',
-    endereco: '',
-    telefone: '',
-    fotoDocumento: '',
-    // ...other fields...
+    fotoPerfil: '',
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -35,9 +36,41 @@ export function SellerRegisterStoreScreen() {
     }));
   };
 
-  const handleContinue = () => {
-    console.log('Continue to next step');
-    navigation.navigate('SellerArea' as never);
+  const handleContinue = async () => {
+    if (!user?.id) {
+      console.log('Usuário não autenticado');
+      return;
+    }
+
+    try {
+      let pictureUrl: string | null = null;
+
+      if (formData.fotoPerfil) {
+        pictureUrl = await uploadFileToSupabase(
+          formData.fotoPerfil,
+          'store_profiles',
+          `pictures/${user.id}/`
+        );
+      }
+
+      const { error } = await supabase
+        .from('store_profile')
+        .update({
+          name: formData.nome || null,
+          picture: pictureUrl || null,
+        })
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Erro ao atualizar store_profile:', error);
+        return;
+      }
+
+      console.log('Store_profile atualizado com sucesso');
+      navigation.navigate('SellerArea' as never);
+    } catch (e) {
+      console.error('Erro ao salvar perfil da loja:', e);
+    }
   };
 
   const handleBack = () => {
@@ -46,11 +79,9 @@ export function SellerRegisterStoreScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Shared shrinking header */}
       <Header scrollY={scrollY} onBack={handleBack} />
 
-      {/* Content */}
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
@@ -74,24 +105,15 @@ export function SellerRegisterStoreScreen() {
               labelStyle={styles.inputLabel}
             />
 
-            <InputField
-              label="Foto de perfil"
-              value={formData.fotoDocumento}
-              onChangeText={(value) => handleInputChange('fotoDocumento', value)}
-              placeholder="Selecione a foto de perfil da sua loja"
-              placeholderTextColor="#999"
-              editable={false}
-              containerStyle={styles.inputGroup}
-              inputStyle={styles.textInput}
-              labelStyle={styles.inputLabel}
+            <FileInputField
+              label="Foto de perfil da loja"
+              value={formData.fotoPerfil}
+              onChange={(uri) => handleInputChange('fotoPerfil', uri)}
             />
-
-            {/* add more InputField instances for other fields as needed */}
           </View>
         </View>
       </ScrollView>
 
-      {/* Continue Button (fixed bottom) */}
       <View style={styles.buttonContainer}>
         <BottomButton title="Continuar" onPress={handleContinue} />
       </View>
@@ -128,9 +150,7 @@ const styles = StyleSheet.create({
       marginBottom: hp('3%'),
     }),
   },
-  formContainer: {
-    // Form container styles
-  },
+  formContainer: {},
   inputGroup: {
     marginBottom: hp('4%'),
     ...(isWeb && {
@@ -147,7 +167,6 @@ const styles = StyleSheet.create({
       fontSize: wp('3.2%'),
     }),
   },
-  
   label: {
     fontSize: wp('4%'),
     fontFamily: fonts.bold700,

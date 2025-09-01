@@ -5,7 +5,7 @@ import { getCurrentUserProfile, UserProfile } from '../services/userProfiles';
 type AuthUser = {
   id: string;
   email: string | null;
-  profile?: UserProfile | null;
+  user_profiles?: UserProfile[];      
 };
 
 type AuthContextValue = {
@@ -27,6 +27,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadUserProfile = useCallback(async (userId: string) => {
     try {
       const profile = await getCurrentUserProfile();
+      console.log('Perfil do usuário carregado:', profile);
       return profile;
     } catch (error) {
       console.error('Erro ao carregar perfil do usuário:', error);

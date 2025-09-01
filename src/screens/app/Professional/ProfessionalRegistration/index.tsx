@@ -12,100 +12,100 @@ import { fonts } from '../../../../constants/fonts';
 import { wp, hp, isWeb } from '../../../../utils/responsive';
 import { Header } from '../../../../components/Header';
 import { useScrollAwareHeader } from '../../../../hooks/useScrollAwareHeader';
+import { MaskedInputField } from '../../../../components/MaskedInputField';
 import { InputField } from '../../../../components/InputField';
 import { BottomButton } from '../../../../components/BottomButton';
 import { fontsizes } from '../../../../constants/fontSizes';
 import { useAuth } from '../../../../context/AuthContext';
-import { upsertUserProfile } from '../../../../services/userProfiles';
 import { supabase } from '../../../../lib/supabaseClient';
+import { FileInputField } from '../../../../components/FileInputField';
+import { uploadFileToSupabase } from '../../../../services/fileUpload';
+import { unmask } from '../../../../utils/masks';
 
 export function ProfessionalRegistrationScreen() {
   const navigation = useNavigation();
-  const { user, signUpWithEmail, signInWithEmail, refreshSession } = useAuth();
+  const { user } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('profissionais');
+  const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+
   const [formData, setFormData] = useState({
-    email: '',
-    senha: '',
-    confirmarSenha: '',
     nome: '',
     cpf: '',
     dataNascimento: '',
     telefone: '',
-    documento: '',
+    documento: '', // caminho temporário do arquivo selecionado
   });
-  const [acceptTerms, setAcceptTerms] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('produtos');
-
-  const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const toISODate = (br: string) => {
-    // esperado DD/MM/AAAA -> AAAA-MM-DD
-    const parts = br.split('/');
-    if (parts.length !== 3) return '';
-    const [dd, mm, yyyy] = parts;
-    if (!dd || !mm || !yyyy) return '';
-    return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
-  };
+const toISODate = (br: string | null) => {
+  if (!br) return null;
+  const trimmed = br.trim(); // remove espaços
+  const parts = trimmed.split('/');
+  if (parts.length !== 3) return null;
+
+  const [dd, mm, yyyy] = parts;
+  if (!dd || !mm || !yyyy) return null;
+
+  // valida se são números e dentro do range
+  const day = parseInt(dd, 10);
+  const month = parseInt(mm, 10);
+  const year = parseInt(yyyy, 10);
+
+  if (day < 1 || day > 31) return null;
+  if (month < 1 || month > 12) return null;
+  if (year < 1900 || year > 2100) return null;
+
+  return `${year}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+};
+
+
 
   const handleContinue = async () => {
+    if (!user?.id) {
+      console.log('Usuário não autenticado');
+      return;
+    }
     if (!acceptTerms) {
+      console.log('É necessário aceitar os termos');
       return;
     }
-    if (!formData.email || (!user && (!formData.senha || !formData.confirmarSenha))) {
-      console.log('Preencha email e senha.');
-      return;
-    }
-    if (!user && formData.senha !== formData.confirmarSenha) {
-      console.log('Senhas não conferem');
-      return;
-    }
+
     setSubmitting(true);
     try {
-      // 1) Garantir sessão: se não autenticado, registrar e tentar logar
-      let currentUserId = user?.id;
-      if (!currentUserId) {
-        // signUp
-        const signUpRes = await signUpWithEmail(formData.email, formData.senha);
-        if (signUpRes.error) {
-          console.log('Erro no signUp:', signUpRes.error);
-          setSubmitting(false);
-          return;
-        }
-        // Alguns projetos exigem confirmação de e-mail. Tentar signIn para obter sessão.
-        const signInRes = await signInWithEmail(formData.email, formData.senha);
-        if (signInRes.error) {
-          console.log('Erro no signIn:', signInRes.error);
-          // Continua sem sessão se exigir confirmação. Upsert só funciona com sessão.
-        }
-        await refreshSession();
+      let documentoUrl: string | null = null;
+
+      if (formData.documento) {
+        documentoUrl = await uploadFileToSupabase(
+          formData.documento,
+          'user_profile',
+          `documents/doc_identi_${user.id}/`
+        );
       }
 
-      // Reavaliar userId após possível login
-      const { data } = await supabase.auth.getSession();
-      currentUserId = data.session?.user.id || currentUserId;
-      if (!currentUserId) {
-        console.log('Usuário não autenticado. Verifique confirmação de e-mail.');
-        setSubmitting(false);
+      const payload = {
+        user_id: user.id,
+        user_type: 'professional' as const,
+        user_status: 'pending' as const,
+        name: formData.nome || null,
+        document: unmask(formData.cpf) || null,
+        date_of_birth: formData.dataNascimento ? toISODate(formData.dataNascimento) : null,
+        phone_number: unmask(formData.telefone) || null,
+        document_picture: documentoUrl,
+      };
+
+      const { error } = await supabase.from('user_profiles').insert([payload]);
+
+      if (error) {
+        console.error('Erro ao criar cadastro profissional:', error);
         return;
       }
 
-      await upsertUserProfile({
-        user_id: currentUserId,
-        user_type: 'professional',
-        email: formData.email,
-        name: formData.nome,
-        document: formData.cpf,
-        date_of_birth: formData.dataNascimento ? toISODate(formData.dataNascimento) : null,
-        phone_number: formData.telefone,
-        document_picture: formData.documento,
-      });
+      console.log('Cadastro profissional criado com sucesso');
       navigation.navigate('ProfessionalProfile' as never);
     } catch (e) {
       console.log('Erro ao salvar cadastro profissional:', e);
@@ -114,63 +114,29 @@ export function ProfessionalRegistrationScreen() {
     }
   };
 
-  const handleDocumentPhoto = () => {
-    // Handle document photo upload — set `documento` with selected filename/path
-    console.log('Document photo upload');
-  };
-
   const handleTabPress = (tab: 'produtos' | 'profissionais') => {
     setActiveTab(tab);
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header 
+      <Header
         scrollY={scrollY}
         activeTab={activeTab}
         onTabPress={handleTabPress}
         useProfessionalMenu={true}
       />
-      
-      <ScrollView 
+
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
       >
-        {/* Title */}
         <Text style={styles.title}>Cadastro profissional</Text>
 
-        {/* Form Fields */}
         <View style={styles.formContainer}>
-          <InputField
-            label="Email"
-            value={formData.email}
-            onChangeText={(value) => handleInputChange('email', value)}
-            placeholder="Digite seu email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-
-          <InputField
-            label="Senha"
-            value={formData.senha}
-            onChangeText={(value) => handleInputChange('senha', value)}
-            placeholder="Digite sua senha"
-            secureTextEntry
-            autoCapitalize="none"
-          />
-
-          <InputField
-            label="Confirmar senha"
-            value={formData.confirmarSenha}
-            onChangeText={(value) => handleInputChange('confirmarSenha', value)}
-            placeholder="Confirme sua senha"
-            secureTextEntry
-            autoCapitalize="none"
-          />
-
           <InputField
             label="Nome"
             value={formData.nome}
@@ -179,69 +145,52 @@ export function ProfessionalRegistrationScreen() {
             autoCapitalize="words"
           />
 
-          <InputField
+          <MaskedInputField
             label="CPF"
-            value={formData.cpf}
-            onChangeText={(value) => handleInputChange('cpf', value)}
-            placeholder="Digite seu CPF"
-            keyboardType="numeric"
-            maxLength={14}
+            mask="cpf"
+            rawValue={formData.cpf}
+            onChangeRaw={(raw) => handleInputChange('cpf', raw)}
+            placeholder="000.000.000-00"
           />
 
-          <InputField
+          <MaskedInputField
             label="Data de nascimento"
-            value={formData.dataNascimento}
-            onChangeText={(value) => handleInputChange('dataNascimento', value)}
+            mask="date"
+            rawValue={formData.dataNascimento}
+            onChangeRaw={(raw) => handleInputChange('dataNascimento', raw)}
             placeholder="DD/MM/AAAA"
-            keyboardType="numeric"
-            maxLength={10}
           />
 
-          <InputField
+          <MaskedInputField
             label="Telefone celular"
-            value={formData.telefone}
-            onChangeText={(value) => handleInputChange('telefone', value)}
-            placeholder="Digite seu telefone"
-            keyboardType="phone-pad"
+            mask="phone"
+            rawValue={formData.telefone}
+            onChangeRaw={(raw) => handleInputChange('telefone', raw)}
+            placeholder="(00) 00000-0000"
           />
 
-          <InputField
+          <FileInputField
             label="Foto do documento de identificação"
             value={formData.documento}
-            onChangeText={(value) => handleInputChange('documento', value)}
-            placeholder="Selecione a foto do documento"
-            editable={false}
-            // keep document upload handled by a separate button/handler
-            containerStyle={styles.documentInputGroup}
+            onChange={(uri) => handleInputChange('documento', uri)}
           />
 
-          
-
-          {/* Document select action */}
-          {/* <TouchableOpacity style={styles.documentButton} onPress={handleDocumentPhoto}>
-            <Text style={styles.documentButtonText}>Selecionar foto</Text>
-          </TouchableOpacity> */}
-
           <View style={styles.termsContainer}>
-          <TouchableOpacity 
-            style={[styles.checkbox, acceptTerms && styles.checkboxChecked]}
-            onPress={() => setAcceptTerms(!acceptTerms)}
-          >
-            {acceptTerms && <Text style={styles.checkmark}>✓</Text>}
-          </TouchableOpacity>
-          <Text style={styles.termsText}>Aceite termos e condições</Text>
+            <TouchableOpacity
+              style={[styles.checkbox, acceptTerms && styles.checkboxChecked]}
+              onPress={() => setAcceptTerms(!acceptTerms)}
+            >
+              {acceptTerms && <Text style={styles.checkmark}>✓</Text>}
+            </TouchableOpacity>
+            <Text style={styles.termsText}>Aceite termos e condições</Text>
+          </View>
         </View>
-        </View>
-
-        {/* Terms Checkbox */}
-        
       </ScrollView>
 
-      {/* Continue Button (fixed bottom) */}
       <View style={styles.buttonContainer}>
-        <BottomButton 
-          title="Continuar" 
-          onPress={handleContinue} 
+        <BottomButton
+          title="Continuar"
+          onPress={handleContinue}
           disabled={!acceptTerms || submitting}
         />
       </View>
@@ -250,50 +199,26 @@ export function ProfessionalRegistrationScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  scrollView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
+  scrollView: { flex: 1 },
   contentContainer: {
     paddingHorizontal: wp('5%'),
     paddingTop: hp('3%'),
     paddingBottom: hp('4%'),
-    ...(isWeb && { paddingHorizontal: wp('3%'), paddingTop: hp('2%'), paddingBottom: hp('3%') }),
+    ...(isWeb && {
+      paddingHorizontal: wp('3%'),
+      paddingTop: hp('2%'),
+      paddingBottom: hp('3%'),
+    }),
   },
   title: {
     fontSize: fontsizes.size24,
     fontFamily: fonts.bold700,
-    color: '#000000',
+    color: '#000',
     marginBottom: hp('4%'),
     textAlign: 'left',
-    ...(isWeb && { fontSize: wp('4%'), marginBottom: hp('3%') }),
   },
-  formContainer: {
-    marginBottom: hp('4%'),
-    ...(isWeb && { marginBottom: hp('3%') }),
-  },
-  documentInputGroup: {
-    marginBottom: hp('2%'),
-  },
-  documentInput: {
-    backgroundColor: '#f5f5f5',
-  },
-  documentButton: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: wp('2%'),
-    paddingHorizontal: wp('3%'),
-    paddingVertical: hp('2%'),
-    alignItems: 'center',
-    marginBottom: hp('3%'),
-  },
-  documentButtonText: {
-    fontSize: wp('3.5%'),
-    fontFamily: fonts.regular400,
-    color: '#999',
-  },
+  formContainer: { marginBottom: hp('4%') },
   termsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -322,7 +247,7 @@ const styles = StyleSheet.create({
   termsText: {
     fontSize: wp('3.5%'),
     fontFamily: fonts.regular400,
-    color: '#000000',
+    color: '#000',
     flex: 1,
   },
   buttonContainer: {
@@ -335,12 +260,5 @@ const styles = StyleSheet.create({
     paddingVertical: hp('2%'),
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
-    ...(isWeb && { 
-      position: 'relative',
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('1.5%'),
-      borderTopWidth: 0,
-      marginTop: hp('2%'),
-    }),
   },
 });

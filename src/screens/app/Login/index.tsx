@@ -55,6 +55,7 @@ export function LoginScreen() {
       } else {
         if (isLogin) {
           // Verificar o tipo de usuário após login
+          console.log('Login bem-sucedido, verificando perfil...');
           const userProfile = await getCurrentUserProfile();
           if (userProfile) {
             Alert.alert(
@@ -211,23 +212,7 @@ export function LoginScreen() {
 
           {/* Additional Options */}
           <View style={styles.additionalOptions}>
-            <TouchableOpacity 
-              style={styles.optionButton}
-              onPress={() => navigation.navigate('ProfessionalRegistration' as never)}
-            >
-              <Text style={styles.optionButtonText}>
-                Tornar-se um Profissional
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.optionButton}
-              onPress={() => navigation.navigate('SellerRegister' as never)}
-            >
-              <Text style={styles.optionButtonText}>
-                Tornar-se um Vendedor
-              </Text>
-            </TouchableOpacity>
+            
           </View>
         </View>
       </ScrollView>

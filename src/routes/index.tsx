@@ -53,6 +53,8 @@ import { MyOrdersScreen } from "../screens/app/MyOrders";
 import { OrderDetailScreen } from "../screens/app/OrderDetails";
 import { DocumentsScreen } from "../screens/app/Documents";
 import { LoginScreen } from "../screens/app/Login";
+import ProfessionalDocuments from "../screens/app/Professional/ProfessionalDocuments";
+
 
 // Enable native screens for better performance
 enableScreens();
@@ -175,6 +177,7 @@ return(
             <Stack.Screen name="OrderDetails" component={OrderDetailScreen}/>
             <Stack.Screen name="Documents" component={DocumentsScreen}/>
             <Stack.Screen name="Login" component={LoginScreen}/>
+            <Stack.Screen name="ProfessionalDocuments" component={ProfessionalDocuments}/>
 
         </Stack.Navigator>
 

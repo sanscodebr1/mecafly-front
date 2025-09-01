@@ -4,11 +4,29 @@ import { UserTypeEnum } from '../services/userProfiles';
 export const useUserType = () => {
   const { user } = useAuth();
 
-  const isCustomer = user?.profile?.user_type === 'customer';
-  const isSeller = user?.profile?.user_type === 'seller';
-  const isProfessional = user?.profile?.user_type === 'professional';
+  // --- USER_PROFILES ---
+  const profilesRaw = (user as any)?.profile?.user_profiles;
+  const profiles = Array.isArray(profilesRaw) ? profilesRaw : [];
+
+  const hasType = (type: string) =>
+    profiles.some(
+      (p) => p?.user_type && String(p.user_type).trim().toLowerCase() === type
+    );
+
+  const isCustomer = hasType('customer');
+  const isProfessional = hasType('professional');
+
+  // --- STORE_PROFILES ---
+  const storesRaw = (user as any)?.profile?.store_profiles;
+  const stores = Array.isArray(storesRaw) ? storesRaw : [];
+
+  const isSeller = stores.length > 0; // se tiver pelo menos 1 loja → é seller
+
   const isLoggedIn = !!user;
-  const userType = user?.profile?.user_type as UserTypeEnum | undefined;
+
+  const userType = (profiles[0]?.user_type
+    ? String(profiles[0].user_type).trim().toLowerCase()
+    : undefined) as UserTypeEnum | undefined;
 
   return {
     isCustomer,
@@ -17,5 +35,6 @@ export const useUserType = () => {
     isLoggedIn,
     userType,
     user,
+    stores, // opcional: já retorna as lojas para uso
   };
 };
