@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,43 +8,157 @@ import {
   Image,
   Alert,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
 import { fonts } from '../../../constants/fonts';
 import { fontsizes } from '../../../constants/fontSizes';
 import { SimpleHeader } from '../../../components/SimpleHeader';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../../constants/colors';
+import { supabase } from '../../../lib/supabaseClient';
+import { 
+  getProductCategories, 
+  getProductBrands, 
+  createOrGetBrand, 
+  uploadProductImages 
+} from '../../../services/productServices';
 
 interface UploadedImage {
   id: string;
   uri: string;
+  isExisting?: boolean;
+  existingId?: string;
+}
+
+interface ProductCategory {
+  id: number;
+  name: string;
+}
+
+interface ProductBrand {
+  id: number;
+  name: string;
+}
+
+interface ProductDetail {
+  product_id: string;
+  product_name: string;
+  product_description?: string;
+  price: number;
+  stock: number;
+  category?: number;
+  category_name?: string;
+  brand_id?: number;
+  brand_name?: string;
+  status: 'active' | 'pending' | 'rejected' | 'inactive';
+  product_images?: {
+    id: string;
+    url: string;
+    type: string;
+  }[];
 }
 
 export function EditProductScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const productId = (route.params as any)?.productId;
 
-  // Mock initial data (replace with real product data)
-  const initial = {
-    title: 'Drone T50 DJI',
-    description: 'Lorem Ipsum is simply dummy text of the printing and typesetting industry.',
-    brand: 'DJI',
-    price: '122000,00',
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [product, setProduct] = useState<ProductDetail | null>(null);
+  
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [brand, setBrand] = useState('');
+  const [brandId, setBrandId] = useState<number | null>(null);
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [price, setPrice] = useState('');
+  const [stock, setStock] = useState('');
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  
+  const [brands, setBrands] = useState<ProductBrand[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [customBrand, setCustomBrand] = useState('');
+
+  const handleBackPress = () => navigation.navigate('MyProducts' as never);
+
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      
+      const [categoriesData, brandsData] = await Promise.all([
+        getProductCategories(),
+        getProductBrands()
+      ]);
+      
+      setCategories(categoriesData);
+      setBrands(brandsData);
+      
+      if (productId) {
+        await loadProductData();
+      }
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+      Alert.alert('Erro', 'Não foi possível carregar os dados iniciais.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const [title, setTitle] = useState(initial.title);
-  const [description, setDescription] = useState(initial.description);
-  const [brand, setBrand] = useState(initial.brand);
-  const [brandOpen, setBrandOpen] = useState(false);
-  const [price, setPrice] = useState(initial.price);
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
-  const [showDeactivateModal, setShowDeactivateModal] = useState(false); // NEW
+  const loadProductData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('vw_product_detail')
+        .select('*')
+        .eq('product_id', productId)
+        .single();
 
-  const brands = ['DJI', 'Yamaha', 'Embraer', 'Outros'];
+      if (error) {
+        console.error('Error loading product:', error);
+        Alert.alert('Erro', 'Não foi possível carregar os dados do produto.');
+        navigation.navigate('MyProducts' as never);
+        return;
+      }
 
-  const handleBackPress = () => navigation.goBack();
+      setProduct(data);
+      setTitle(data.product_name || '');
+      setDescription(data.product_description || '');
+      setBrand(data.brand_name || '');
+      setBrandId(data.brand_id);
+      setCategoryId(data.category);
+      setPrice(formatPriceFromCents(data.price));
+      setStock(data.stock?.toString() || '0');
+      
+      if (data.product_images && data.product_images.length > 0) {
+        const existingImages = data.product_images.map((img: any) => ({
+          id: `existing_${img.id}`,
+          uri: img.url,
+          isExisting: true,
+          existingId: img.id,
+        }));
+        setUploadedImages(existingImages);
+      }
+    } catch (error) {
+      console.error('Error loading product data:', error);
+      Alert.alert('Erro', 'Erro ao carregar dados do produto.');
+      navigation.goBack();
+    }
+  };
+
+  const formatPriceFromCents = (cents: number): string => {
+    const value = (cents / 100).toFixed(2);
+    return value.replace('.', ',');
+  };
 
   const requestPermissions = async () => {
     if (isWeb) return true;
@@ -57,8 +171,14 @@ export function EditProductScreen() {
   };
 
   const handleUploadImage = async () => {
+    if (uploadedImages.length >= 5) {
+      Alert.alert('Limite atingido', 'Você pode adicionar no máximo 5 imagens por produto.');
+      return;
+    }
+
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
+    
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -66,10 +186,15 @@ export function EditProductScreen() {
         aspect: [1, 1],
         quality: 0.85,
       });
+      
       if (!result.canceled && result.assets && result.assets[0]) {
         setUploadedImages(prev => [
           ...prev,
-          { id: `image_${Date.now()}`, uri: result.assets[0].uri },
+          { 
+            id: `new_${Date.now()}`, 
+            uri: result.assets[0].uri,
+            isExisting: false
+          },
         ]);
       }
     } catch (e) {
@@ -78,8 +203,22 @@ export function EditProductScreen() {
     }
   };
 
-  const handleRemoveImage = (id: string) =>
-    setUploadedImages(prev => prev.filter(i => i.id !== id));
+  const handleRemoveImage = (id: string) => {
+    Alert.alert(
+      'Remover imagem',
+      'Deseja remover esta imagem?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Remover', 
+          style: 'destructive',
+          onPress: () => {
+            setUploadedImages(prev => prev.filter(i => i.id !== id));
+          }
+        },
+      ]
+    );
+  };
 
   const formatPrice = (text: string) => {
     let t = text.replace(/\./g, ',');
@@ -90,7 +229,9 @@ export function EditProductScreen() {
     decPart = decPart.slice(0, 2);
     return decPart ? `${intPart},${decPart}` : intPart;
   };
+
   const onPriceChange = (t: string) => setPrice(formatPrice(t));
+  
   const onPriceBlur = () => {
     if (!price) return;
     if (!price.includes(',')) {
@@ -101,50 +242,252 @@ export function EditProductScreen() {
     setPrice(`${i},${(d + '00').slice(0, 2)}`);
   };
 
-  // Open confirm modal instead of immediate alert
-  const handleDeactivate = () => setShowDeactivateModal(true);
+  const handleStockChange = (text: string) => {
+    const numericValue = text.replace(/[^0-9]/g, '');
+    setStock(numericValue);
+  };
+
+  const handleStatusToggle = () => {
+    const currentStatus = product?.status;
+    if (currentStatus === 'inactive') {
+      Alert.alert(
+        'Reativar produto',
+        'Deseja reativar este produto? Ele será enviado para análise.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { 
+            text: 'Reativar', 
+            onPress: () => updateProductStatus('pending')
+          },
+        ]
+      );
+    } else {
+      setShowDeactivateModal(true);
+    }
+  };
 
   const handleConfirmDeactivate = () => {
     setShowDeactivateModal(false);
-    // call API to deactivate here
-    navigation.navigate('DeactivateProductSuccess' as never);
+    updateProductStatus('inactive');
   };
 
-  const handleSave = () => {
-    const numeric = parseFloat(price.replace(/\./g, '').replace(',', '.'));
-    console.log({ title, description, brand, price, numeric, uploadedImages });
-    Alert.alert('Salvo', 'Alterações salvas com sucesso.');
-    navigation.goBack();
+  const updateProductStatus = async (newStatus: string) => {
+    try {
+      setSaving(true);
+      
+      const { error } = await supabase
+        .from('product')
+        .update({ status: newStatus })
+        .eq('id', productId);
+
+      if (error) {
+        console.error('Error updating product status:', error);
+        Alert.alert('Erro', 'Não foi possível atualizar o status do produto.');
+        return;
+      }
+
+      const statusMessage = newStatus === 'inactive' 
+        ? 'Produto inativado com sucesso.' 
+        : 'Produto reativado e enviado para análise.';
+      
+      Alert.alert('Sucesso', statusMessage, [
+        { text: 'OK', onPress: () => navigation.navigate('MyProducts' as never) }
+      ]);
+      
+    } catch (error) {
+      console.error('Error updating product status:', error);
+      Alert.alert('Erro', 'Erro ao atualizar status do produto.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleSave = async () => {
+    if (!title.trim()) {
+      Alert.alert('Erro', 'O título do produto é obrigatório.');
+      return;
+    }
+
+    if (!description.trim()) {
+      Alert.alert('Erro', 'A descrição do produto é obrigatória.');
+      return;
+    }
+
+    if (!categoryId) {
+      Alert.alert('Erro', 'Selecione uma categoria.');
+      return;
+    }
+
+    if (!price || parseFloat(price.replace(',', '.')) <= 0) {
+      Alert.alert('Erro', 'Informe um preço válido.');
+      return;
+    }
+
+    if (!stock.trim() || parseInt(stock) < 0) {
+      Alert.alert('Erro', 'Informe um estoque válido.');
+      return;
+    }
+
+    if (uploadedImages.length === 0) {
+      Alert.alert('Erro', 'Adicione pelo menos uma imagem do produto.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      let finalBrandId = brandId;
+      if (customBrand.trim()) {
+        finalBrandId = await createOrGetBrand(customBrand.trim());
+      } else if (!brandId) {
+        Alert.alert('Erro', 'Selecione ou digite uma marca.');
+        return;
+      }
+
+      const priceInCents = Math.round(parseFloat(price.replace(',', '.')) * 100);
+
+      const { error: productError } = await supabase
+        .from('product')
+        .update({
+          name: title.trim(),
+          description: description.trim(),
+          price: priceInCents,
+          category: categoryId,
+          brand_id: finalBrandId,
+          stock: parseInt(stock) || 0,
+          status: 'pending'
+        })
+        .eq('id', productId);
+
+      if (productError) {
+        console.error('Error updating product:', productError);
+        Alert.alert('Erro', 'Não foi possível atualizar o produto.');
+        return;
+      }
+
+      await handleImageUpdates();
+
+      Alert.alert('Sucesso', 'Produto atualizado com sucesso.', [
+        { text: 'OK', onPress: () => navigation.navigate('MyProducts' as never) }
+      ]);
+
+    } catch (error) {
+      console.error('Error saving product:', error);
+      Alert.alert('Erro', 'Erro ao salvar as alterações.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleImageUpdates = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData.session?.user;
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const newImages = uploadedImages.filter(img => !img.isExisting);
+      const existingImages = uploadedImages.filter(img => img.isExisting);
+
+      let newImageUrls: string[] = [];
+      if (newImages.length > 0) {
+        const imageUris = newImages.map(img => img.uri);
+        newImageUrls = await uploadProductImages(user.id, imageUris);
+      }
+
+      const imagesToKeep = existingImages.map(img => img.existingId).filter(Boolean);
+
+      if (product?.product_images) {
+        const allExistingIds = product.product_images.map(img => img.id);
+        const imagesToDelete = allExistingIds.filter(id => !imagesToKeep.includes(id));
+        
+        if (imagesToDelete.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('product_image')
+            .delete()
+            .in('id', imagesToDelete);
+
+          if (deleteError) {
+            console.error('Error deleting images:', deleteError);
+          }
+        }
+      }
+
+      if (newImageUrls.length > 0) {
+        const imageData = newImageUrls.map((url, index) => ({
+          product_id: parseInt(productId),
+          url,
+          type: (existingImages.length === 0 && index === 0) ? 'main' : 'secondary',
+        }));
+
+        const { error: insertError } = await supabase
+          .from('product_image')
+          .insert(imageData);
+
+        if (insertError) {
+          console.error('Error inserting new images:', insertError);
+          throw insertError;
+        }
+      }
+
+      if (existingImages.length > 0) {
+        const firstImageId = existingImages[0].existingId;
+        if (firstImageId) {
+          await supabase
+            .from('product_image')
+            .update({ type: 'main' })
+            .eq('id', firstImageId);
+        }
+      }
+
+    } catch (error) {
+      console.error('Error handling image updates:', error);
+      throw error;
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, getWebStyles()]}>
+        <View style={styles.header}>
+          <SimpleHeader title="Editar produto" onBack={handleBackPress} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primaryRed} />
+          <Text style={styles.loadingText}>Carregando produto...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
-      {/* Header */}
       <View style={styles.header}>
         <SimpleHeader title="Editar produto" onBack={handleBackPress} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.sectionPadding}>
-          {/* Título */}
+          
           <Text style={styles.label}>Título:</Text>
           <View style={styles.inputWrap}>
             <TextInput
               value={title}
               onChangeText={setTitle}
-              placeholder=""
+              placeholder="Nome do produto"
               style={styles.input}
               placeholderTextColor="#999"
             />
           </View>
 
-          {/* Descrição */}
           <Text style={styles.label}>Descrição:</Text>
           <View style={styles.textareaWrap}>
             <TextInput
               value={description}
               onChangeText={setDescription}
-              placeholder=""
+              placeholder="Descreva seu produto"
               multiline
               textAlignVertical="top"
               style={styles.textarea}
@@ -152,7 +495,36 @@ export function EditProductScreen() {
             />
           </View>
 
-          {/* Marca */}
+          <Text style={styles.label}>Categoria:</Text>
+          <View>
+            <TouchableOpacity
+              style={styles.selectTrigger}
+              activeOpacity={0.8}
+              onPress={() => setCategoryOpen(o => !o)}
+            >
+              <Text style={styles.selectText}>
+                {categories.find(c => c.id === categoryId)?.name || 'Selecionar categoria'}
+              </Text>
+              <Text style={styles.chevron}>{categoryOpen ? '▴' : '▾'}</Text>
+            </TouchableOpacity>
+            {categoryOpen && (
+              <View style={styles.selectMenu}>
+                {categories.map(category => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={styles.selectItem}
+                    onPress={() => {
+                      setCategoryId(category.id);
+                      setCategoryOpen(false);
+                    }}
+                  >
+                    <Text style={styles.selectItemText}>{category.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
           <Text style={styles.label}>Marca:</Text>
           <View>
             <TouchableOpacity
@@ -160,33 +532,73 @@ export function EditProductScreen() {
               activeOpacity={0.8}
               onPress={() => setBrandOpen(o => !o)}
             >
-              <Text style={styles.selectText}>{brand || 'Selecionar'}</Text>
+              <Text style={styles.selectText}>
+                {customBrand || brand || 'Selecionar marca'}
+              </Text>
               <Text style={styles.chevron}>{brandOpen ? '▴' : '▾'}</Text>
             </TouchableOpacity>
             {brandOpen && (
               <View style={styles.selectMenu}>
                 {brands.map(b => (
                   <TouchableOpacity
-                    key={b}
+                    key={b.id}
                     style={styles.selectItem}
                     onPress={() => {
-                      setBrand(b);
+                      setBrand(b.name);
+                      setBrandId(b.id);
+                      setCustomBrand('');
                       setBrandOpen(false);
                     }}
                   >
-                    <Text style={styles.selectItemText}>{b}</Text>
+                    <Text style={styles.selectItemText}>{b.name}</Text>
                   </TouchableOpacity>
                 ))}
+                <View style={styles.customBrandContainer}>
+                  <Text style={styles.customBrandLabel}>Ou digite uma nova marca:</Text>
+                  <TextInput
+                    value={customBrand}
+                    onChangeText={(text) => {
+                      setCustomBrand(text);
+                      setBrandId(null);
+                      setBrand('');
+                    }}
+                    placeholder="Digite o nome da marca"
+                    style={styles.customBrandInput}
+                    placeholderTextColor="#999"
+                  />
+                </View>
               </View>
             )}
           </View>
 
-          {/* Imagens */}
+          <Text style={styles.label}>Estoque de itens:</Text>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={stock}
+              onChangeText={handleStockChange}
+              placeholder="Quantidade em estoque"
+              keyboardType="numeric"
+              style={styles.input}
+              placeholderTextColor="#999"
+            />
+          </View>
+
           <Text style={styles.label}>Imagens:</Text>
-          <TouchableOpacity style={styles.uploadBar} onPress={handleUploadImage} activeOpacity={0.8}>
-            <Text style={styles.uploadText}>Anexe aqui</Text>
+          <TouchableOpacity 
+            style={[styles.uploadBar, uploadedImages.length >= 5 && styles.uploadBarDisabled]} 
+            onPress={handleUploadImage} 
+            activeOpacity={0.8}
+            disabled={uploadedImages.length >= 5}
+          >
+            <Text style={[styles.uploadText, uploadedImages.length >= 5 && styles.uploadTextDisabled]}>
+              {uploadedImages.length >= 5 ? 'Limite máximo atingido' : 'Anexe aqui'}
+            </Text>
             <Image source={require('../../../assets/icons/cloud.png')} style={styles.cloudIcon} />
           </TouchableOpacity>
+
+          <Text style={styles.imageCounter}>
+            {uploadedImages.length}/5 imagens
+          </Text>
 
           {uploadedImages.length > 0 && (
             <View style={styles.imagesGrid}>
@@ -200,12 +612,16 @@ export function EditProductScreen() {
                   >
                     <Text style={styles.removeBtnText}>×</Text>
                   </TouchableOpacity>
+                  {img.isExisting && (
+                    <View style={styles.existingBadge}>
+                      <Text style={styles.existingBadgeText}>Atual</Text>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
           )}
 
-          {/* Preço */}
           <Text style={styles.label}>Preço:</Text>
           <View style={styles.inputWrap}>
             <TextInput
@@ -219,36 +635,69 @@ export function EditProductScreen() {
             />
           </View>
 
-          {/* Buttons */}
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={handleDeactivate} activeOpacity={0.9}>
-              <Text style={styles.secondaryBtnText}>Inativar produto</Text>
+            <TouchableOpacity 
+              style={[
+                styles.secondaryBtn, 
+                product?.status === 'inactive' ? styles.activateBtn : styles.deactivateBtn
+              ]} 
+              onPress={handleStatusToggle} 
+              activeOpacity={0.9}
+              disabled={saving}
+            >
+              <Text style={styles.secondaryBtnText}>
+                {product?.status === 'inactive' ? 'Reativar produto' : 'Inativar produto'}
+              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleSave} activeOpacity={0.9}>
-              <Text style={styles.primaryBtnText}>Salvar</Text>
+            <TouchableOpacity 
+              style={styles.primaryBtn} 
+              onPress={handleSave} 
+              activeOpacity={0.9}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Salvar alterações</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
 
-      {/* CONFIRM DEACTIVATE MODAL */}
       {showDeactivateModal && (
         <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowDeactivateModal(false)} />
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1} 
+            onPress={() => setShowDeactivateModal(false)} 
+          />
           <View style={styles.modalCard}>
             <View style={styles.modalIconCircle}>
               <Text style={styles.modalIconText}>!</Text>
             </View>
             <Text style={styles.modalMessage}>
-              Tem certeza que deseja inativar{"\n"}este produto
+              Tem certeza que deseja inativar{"\n"}este produto?
             </Text>
             <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setShowDeactivateModal(false)}>
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.modalBtnCancel]} 
+                onPress={() => setShowDeactivateModal(false)}
+                disabled={saving}
+              >
                 <Text style={[styles.modalBtnText, styles.modalBtnTextCancel]}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnDanger]} onPress={handleConfirmDeactivate}>
-                <Text style={styles.modalBtnText}>Inativar</Text>
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.modalBtnDanger]} 
+                onPress={handleConfirmDeactivate}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalBtnText}>Inativar</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -276,6 +725,20 @@ const styles = StyleSheet.create({
     ...(isWeb && { paddingHorizontal: wp('3%') }),
   },
 
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  loadingText: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginTop: hp('2%'),
+    ...(isWeb && { fontSize: wp('3%') }),
+  },
+
   label: {
     marginLeft: wp('4%'),
     marginTop: hp('1.6%'),
@@ -295,7 +758,6 @@ const styles = StyleSheet.create({
     ...(isWeb && { paddingVertical: hp('1.4%') }),
   },
   input: {
-    opacity: 0.5,
     fontFamily: fonts.regular400,
     fontSize: fontsizes.size16,
     color: '#000000',
@@ -359,15 +821,43 @@ const styles = StyleSheet.create({
     ...(isWeb && { fontSize: wp('3%') }),
   },
 
+  customBrandContainer: {
+    padding: wp('4%'),
+    backgroundColor: '#F8F9FA',
+    borderTopWidth: 1,
+    borderTopColor: '#E9ECEF',
+  },
+  customBrandLabel: {
+    fontFamily: fonts.semiBold600,
+    fontSize: fontsizes.size14,
+    color: '#666',
+    marginBottom: hp('1%'),
+  },
+  customBrandInput: {
+    backgroundColor: '#fff',
+    borderRadius: wp('1%'),
+    paddingHorizontal: wp('3%'),
+    paddingVertical: hp('1%'),
+    fontSize: fontsizes.size16,
+    fontFamily: fonts.regular400,
+    color: '#000',
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+
   uploadBar: {
     backgroundColor: '#D6DBDE',
     borderRadius: wp('2%'),
     paddingVertical: hp('1.6%'),
     paddingHorizontal: wp('4%'),
-    marginBottom: hp('2%'),
+    marginBottom: hp('1%'),
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  uploadBarDisabled: {
+    backgroundColor: '#E8E8E8',
+    opacity: 0.6,
   },
   uploadText: {
     fontFamily: fonts.regular400,
@@ -375,7 +865,18 @@ const styles = StyleSheet.create({
     color: '#000000',
     ...(isWeb && { fontSize: wp('3%') }),
   },
+  uploadTextDisabled: {
+    color: '#999',
+  },
   cloudIcon: { width: hp('3.2%'), height: hp('3.2%') },
+
+  imageCounter: {
+    fontSize: fontsizes.size14,
+    fontFamily: fonts.regular400,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: hp('2%'),
+  },
 
   imagesGrid: {
     flexDirection: 'row',
@@ -407,16 +908,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...(isWeb && { width: wp('4%'), height: wp('4%'), borderRadius: wp('2%') }),
   },
-  removeBtnText: { color: '#fff', fontSize: wp('3.8%'), fontWeight: 'bold' },
+  removeBtnText: { 
+    color: '#fff', 
+    fontSize: wp('3.8%'), 
+    fontWeight: 'bold',
+    ...(isWeb && { fontSize: wp('2.5%') }),
+  },
+  existingBadge: {
+    position: 'absolute',
+    bottom: hp('0.5%'),
+    left: wp('1%'),
+    backgroundColor: 'rgba(34, 216, 131, 0.9)',
+    paddingHorizontal: wp('2%'),
+    paddingVertical: hp('0.3%'),
+    borderRadius: wp('1%'),
+  },
+  existingBadgeText: {
+    color: '#fff',
+    fontSize: wp('2.5%'),
+    fontFamily: fonts.semiBold600,
+    ...(isWeb && { fontSize: wp('1.8%') }),
+  },
 
   actions: { marginTop: hp('1%'), marginBottom: hp('3%') },
   secondaryBtn: {
-    backgroundColor: Colors.primaryRed,
     borderRadius: wp('6%'),
     paddingVertical: hp('1.2%'),
     alignItems: 'center',
     marginBottom: hp('1.2%'),
     ...(isWeb && { paddingVertical: hp('1.8%') }),
+  },
+  deactivateBtn: {
+    backgroundColor: Colors.primaryRed,
+  },
+  activateBtn: {
+    backgroundColor: '#22D883',
   },
   secondaryBtnText: {
     color: '#fff',
@@ -429,6 +955,7 @@ const styles = StyleSheet.create({
     borderRadius: wp('6%'),
     paddingVertical: hp('1.2%'),
     alignItems: 'center',
+    justifyContent: 'center',
     ...(isWeb && { paddingVertical: hp('1.8%') }),
   },
   primaryBtnText: {
@@ -458,7 +985,6 @@ const styles = StyleSheet.create({
     borderRadius: wp('3%'),
     paddingVertical: hp('2.2%'),
     paddingHorizontal: wp('5%'),
-    // soft shadow
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 12,

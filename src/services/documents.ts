@@ -36,7 +36,7 @@ export const documentsService = {
   // Buscar documentos do usuário
   async getUserDocuments(userId: string): Promise<UserDocument[]> {
     const { data, error } = await supabase
-      .from('user_document')
+      .from('professional_document')
       .select(`
         *,
         document_type (*)
@@ -116,7 +116,7 @@ export const documentsService = {
     filePath: string
   ): Promise<void> {
     const { error } = await supabase
-      .from('user_document')
+      .from('professional_document')
       .insert({
         user_id: userId,
         type: documentTypeId,
@@ -157,7 +157,7 @@ export const documentsService = {
     try {
       // Buscar documento anterior
       const { data: existingDoc } = await supabase
-        .from('user_document')
+        .from('professional_document')
         .select('*')
         .eq('user_id', userId)
         .eq('type', documentTypeId)
@@ -168,7 +168,7 @@ export const documentsService = {
 
       // Atualizar registro no banco
       const { error } = await supabase
-        .from('user_document')
+        .from('professional_document')
         .update({
           url: newFilePath,
           status: 'pending',
@@ -201,7 +201,7 @@ export const documentsService = {
   async deleteDocument(documentId: number): Promise<void> {
     // Buscar documento
     const { data: document } = await supabase
-      .from('user_document')
+      .from('professional_document')
       .select('*')
       .eq('id', documentId)
       .single();
@@ -219,7 +219,7 @@ export const documentsService = {
 
     // Deletar registro do banco
     const { error } = await supabase
-      .from('user_document')
+      .from('professional_document')
       .delete()
       .eq('id', documentId);
 

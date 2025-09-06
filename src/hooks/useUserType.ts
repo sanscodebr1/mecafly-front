@@ -5,7 +5,8 @@ export const useUserType = () => {
   const { user } = useAuth();
 
   // --- USER_PROFILES ---
-  const profilesRaw = (user as any)?.profile?.user_profiles;
+  // Tentar acessar de ambos os lugares para garantir compatibilidade
+  const profilesRaw = (user as any)?.profile?.user_profiles || (user as any)?.user_profiles;
   const profiles = Array.isArray(profilesRaw) ? profilesRaw : [];
 
   const hasType = (type: string) =>
@@ -17,7 +18,8 @@ export const useUserType = () => {
   const isProfessional = hasType('professional');
 
   // --- STORE_PROFILES ---
-  const storesRaw = (user as any)?.profile?.store_profiles;
+  // Tentar acessar de ambos os lugares para garantir compatibilidade
+  const storesRaw = (user as any)?.profile?.store_profiles || (user as any)?.store_profiles;
   const stores = Array.isArray(storesRaw) ? storesRaw : [];
 
   const isSeller = stores.length > 0; // se tiver pelo menos 1 loja → é seller

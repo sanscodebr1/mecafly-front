@@ -88,7 +88,6 @@ export function ProfessionalAreaScreen() {
           </Text>
 
           {profStatus === 'pending' ? (
-            // 👉 mesmo comportamento do Seller: mostra PendingMessage e NÃO renderiza os botões
             <PendingMessage type="do seu perfil profissional" />
           ) : (
             <View style={styles.buttonsContainer}>

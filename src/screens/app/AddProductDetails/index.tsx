@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -14,24 +16,60 @@ import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 import { SimpleHeader } from '../../../components/SimpleHeader';
 import { InputField } from '../../../components/InputField';
 import { BottomButton } from '../../../components/BottomButton';
+import { getProductBrands, ProductBrand } from '../../../services/productServices';
+import { useProductCreation } from '../../../context/ProductCreationContext';
 
 export function AddProductDetailsScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
-  
+  const { productData, setProductDetails } = useProductCreation();
+
   const [formData, setFormData] = useState({
     titulo: '',
     descricao: '',
     marca: '',
+    estoque: '',
   });
 
+  const [brands, setBrands] = useState<ProductBrand[]>([]);
   const [showBrandDropdown, setShowBrandDropdown] = useState(false);
+  const [loadingBrands, setLoadingBrands] = useState(true);
+
+  useEffect(() => {
+    loadBrands();
+
+    // Load existing data if available
+    if (productData.productDetails) {
+      setFormData(productData.productDetails);
+    }
+  }, []);
+
+  const loadBrands = async () => {
+    try {
+      const brandsData = await getProductBrands();
+      setBrands(brandsData);
+    } catch (error) {
+      console.error('Error loading brands:', error);
+      Alert.alert('Erro', 'Não foi possível carregar as marcas');
+    } finally {
+      setLoadingBrands(false);
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    // Para o campo de estoque, permitir apenas números
+    if (field === 'estoque') {
+      const numericValue = value.replace(/[^0-9]/g, '');
+      setFormData(prev => ({
+        ...prev,
+        [field]: numericValue
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
   };
 
   const handleBackPress = () => {
@@ -39,41 +77,37 @@ export function AddProductDetailsScreen() {
   };
 
   const handleContinue = () => {
-    const { titulo, descricao, marca } = formData;
-    if (titulo.trim() && descricao.trim() && marca.trim()) {
-      console.log('Product details:', formData);
+    const { titulo, descricao, marca, estoque } = formData;
+    if (titulo.trim() && descricao.trim() && marca.trim() && estoque.trim()) {
+      setProductDetails({
+        titulo: titulo.trim(),
+        descricao: descricao.trim(),
+        marca: marca.trim(),
+        marcaId: brands.find(b => b.name === marca)?.id || 0,
+        stock: parseInt(estoque) || 0,
+      });
       navigation.navigate('AddProductImages' as never);
+    } else {
+      Alert.alert('Campos obrigatórios', 'Preencha todos os campos para continuar.');
     }
   };
 
-  const handleBrandSelect = (brand: string) => {
-    handleInputChange('marca', brand);
+  const handleBrandSelect = (brand: ProductBrand) => {
+    handleInputChange('marca', brand.name);
     setShowBrandDropdown(false);
   };
 
-  const brands = [
-    'DJI',
-    'Parrot',
-    'Autel',
-    'Skydio',
-    'Yuneec',
-    'Holy Stone',
-    'Potensic',
-    'Eachine'
-  ];
-
-  const isFormValid = formData.titulo.trim() && formData.descricao.trim() && formData.marca.trim();
+  const isFormValid = formData.titulo.trim() && formData.descricao.trim() && formData.marca.trim() && formData.estoque.trim();
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
-  {/* Header */}
-  
-        <View style={styles.header}>
-        <SimpleHeader title="Cadastro produto" />
-        </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <SimpleHeader title="Cadastro produto" onBack={handleBackPress} />
+      </View>
 
       {/* Content */}
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
@@ -84,13 +118,13 @@ export function AddProductDetailsScreen() {
           <Text style={styles.sectionTitle}>
             Descreva as características do{'\n'}anúncio
           </Text>
-          
+
           {/* Título Field */}
           <InputField
             label="Título:"
             value={formData.titulo}
             onChangeText={(value) => handleInputChange('titulo', value)}
-            placeholder=""
+            placeholder="Digite o título do produto"
             containerStyle={styles.inputGroup}
             inputStyle={styles.textInput}
             labelStyle={styles.inputLabel}
@@ -102,7 +136,7 @@ export function AddProductDetailsScreen() {
             label="Descrição:"
             value={formData.descricao}
             onChangeText={(value) => handleInputChange('descricao', value)}
-            placeholder=""
+            placeholder="Descreva o produto detalhadamente"
             containerStyle={styles.inputGroup}
             inputStyle={[styles.textInput, styles.textArea]}
             labelStyle={styles.inputLabel}
@@ -114,30 +148,50 @@ export function AddProductDetailsScreen() {
           {/* Marca Field */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Marca:</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.dropdownButton}
               onPress={() => setShowBrandDropdown(!showBrandDropdown)}
+              disabled={loadingBrands}
             >
               <Text style={[styles.dropdownText, !formData.marca && styles.dropdownPlaceholder]}>
-                {formData.marca || 'Selecione uma marca'}
+                {loadingBrands ? 'Carregando...' : (formData.marca || 'Selecione uma marca')}
               </Text>
-              <Text style={styles.dropdownArrow}>▼</Text>
+              {loadingBrands ? (
+                <ActivityIndicator size="small" color="#666" />
+              ) : (
+                <Text style={styles.dropdownArrow}>▼</Text>
+              )}
             </TouchableOpacity>
-            
-            {showBrandDropdown && (
+
+            {showBrandDropdown && !loadingBrands && (
               <View style={styles.dropdownList}>
-                {brands.map((brand, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.dropdownItem}
-                    onPress={() => handleBrandSelect(brand)}
-                  >
-                    <Text style={styles.dropdownItemText}>{brand}</Text>
-                  </TouchableOpacity>
-                ))}
+                <ScrollView style={styles.dropdownScrollView} nestedScrollEnabled>
+                  {brands.map((brand) => (
+                    <TouchableOpacity
+                      key={brand.id}
+                      style={styles.dropdownItem}
+                      onPress={() => handleBrandSelect(brand)}
+                    >
+                      <Text style={styles.dropdownItemText}>{brand.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
               </View>
             )}
           </View>
+
+          {/* Estoque de Itens Field */}
+          <InputField
+            label="Estoque de itens:"
+            value={formData.estoque}
+            onChangeText={(value) => handleInputChange('estoque', value)}
+            placeholder="Digite a quantidade em estoque"
+            containerStyle={styles.inputGroup}
+            inputStyle={styles.textInput}
+            labelStyle={styles.inputLabel}
+            multiline={false}
+            keyboardType="numeric"
+          />
         </View>
       </ScrollView>
 
@@ -147,7 +201,6 @@ export function AddProductDetailsScreen() {
           title="Prosseguir"
           onPress={handleContinue}
           disabled={!isFormValid}
-          style={[styles.continueButton, !isFormValid && styles.disabledButton]}
           textStyle={styles.continueButtonText}
         />
       </View>
@@ -169,36 +222,6 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       paddingHorizontal: wp('3%'),
       paddingVertical: hp('1%'),
-    }),
-  },
-  backButton: {
-    padding: wp('2%'),
-    ...(isWeb && {
-      padding: wp('1%'),
-    }),
-  },
-  backIcon: {
-    paddingBottom: hp('1.6%'),
-    fontSize: wp('6%'),
-    color: '#000000',
-    fontWeight: 'bold',
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  headerTitle: {
-    fontSize: wp('5%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    flex: 1,
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  placeholder: {
-    width: wp('6%'),
-    ...(isWeb && {
-      width: wp('4%'),
     }),
   },
   scrollView: {
@@ -305,6 +328,9 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       maxHeight: hp('30%'),
     }),
+  },
+  dropdownScrollView: {
+    maxHeight: hp('25%'),
   },
   dropdownItem: {
     paddingHorizontal: wp('4%'),

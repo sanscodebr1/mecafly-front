@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,17 +6,28 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
 import { fonts } from '../../../constants/fonts';
 import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 import { SimpleHeader } from '../../../components/SimpleHeader';
 import { InputField } from '../../../components/InputField';
 import { BottomButton } from '../../../components/BottomButton';
-import { createUserAddress, CreateAddressData } from '../../../services/userAddress';
+import { 
+  getUserAddressById, 
+  updateUserAddress, 
+  CreateAddressData,
+  UserAddress 
+} from '../../../services/userAddress';
 
-export function NewAddressScreen() {
+interface EditAddressRouteParams {
+  addressId: string;
+}
+
+export function EditAddressScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const { addressId } = route.params as EditAddressRouteParams;
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
   
   const [formData, setFormData] = useState<CreateAddressData>({
@@ -28,6 +39,39 @@ export function NewAddressScreen() {
     state: '',
   });
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  useEffect(() => {
+    loadAddressData();
+  }, [addressId]);
+
+  const loadAddressData = async () => {
+    setInitialLoading(true);
+    try {
+      const address = await getUserAddressById(parseInt(addressId));
+      if (address) {
+        setFormData({
+          zipcode: address.zipcode || '',
+          address: address.address || '',
+          number: address.number || '',
+          neighborhood: address.neighborhood || '',
+          city: address.city || '',
+          state: address.state || '',
+        });
+      } else {
+        Alert.alert('Erro', 'Endereço não encontrado.', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar endereço:', error);
+      Alert.alert('Erro', 'Não foi possível carregar o endereço.', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+    } finally {
+      setInitialLoading(false);
+    }
+  };
 
   const handleInputChange = (field: keyof CreateAddressData, value: string) => {
     setFormData(prev => ({
@@ -64,26 +108,26 @@ export function NewAddressScreen() {
     return true;
   };
 
-  const handleSaveData = async () => {
+  const handleUpdateAddress = async () => {
     if (!validateForm()) {
       return;
     }
 
     setLoading(true);
     try {
-      const success = await createUserAddress(formData);
+      const success = await updateUserAddress(parseInt(addressId), formData);
       
       if (success) {
         Alert.alert(
           'Sucesso', 
-          'Endereço salvo com sucesso!',
+          'Endereço atualizado com sucesso!',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       } else {
-        Alert.alert('Erro', 'Não foi possível salvar o endereço. Tente novamente.');
+        Alert.alert('Erro', 'Não foi possível atualizar o endereço. Tente novamente.');
       }
     } catch (error) {
-      console.error('Erro ao salvar endereço:', error);
+      console.error('Erro ao atualizar endereço:', error);
       Alert.alert('Erro', 'Ocorreu um erro inesperado. Tente novamente.');
     } finally {
       setLoading(false);
@@ -98,7 +142,7 @@ export function NewAddressScreen() {
     // Remove caracteres não numéricos
     const cleaned = value.replace(/\D/g, '');
     
-    // Aplica máscara XXX-XX
+    // Aplica máscara XXXXX-XXX
     if (cleaned.length <= 5) {
       return cleaned;
     } else {
@@ -111,11 +155,24 @@ export function NewAddressScreen() {
     handleInputChange('zipcode', formatted);
   };
 
+  if (initialLoading) {
+    return (
+      <SafeAreaView style={[styles.container, getWebStyles()]}>
+        <View style={styles.header}>
+          <SimpleHeader title='Editar endereço' onBack={handleBackPress} />
+        </View>
+        <View style={styles.loadingContainer}>
+          {/* Você pode adicionar um componente de loading aqui */}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
       {/* Header */}
       <View style={styles.header}>
-        <SimpleHeader title='Novo endereço' onBack={handleBackPress} />
+        <SimpleHeader title='Editar endereço' onBack={handleBackPress} />
       </View>
 
       {/* Form Content */}
@@ -178,12 +235,12 @@ export function NewAddressScreen() {
         </View>
       </ScrollView>
 
-      {/* Save Button */}
+      {/* Update Button */}
       <View style={styles.buttonContainer}>
         <BottomButton
-          title={loading ? "Salvando..." : "Salvar dados"}
-          onPress={handleSaveData}
-          textStyle={styles.saveButtonText}
+          title={loading ? "Atualizando..." : "Atualizar endereço"}
+          onPress={handleUpdateAddress}
+          textStyle={styles.updateButtonText}
           disabled={loading}
         />
       </View>
@@ -229,20 +286,12 @@ const styles = StyleSheet.create({
       paddingVertical: hp('2%'),
     }),
   },
-  saveButton: {
-    backgroundColor: '#22D883',
-    borderRadius: wp('6%'),
-    paddingVertical: hp('1%'),
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    ...(isWeb && {
-      paddingVertical: hp('2%'),
-    }),
   },
-  saveButtonDisabled: {
-    backgroundColor: '#A0A0A0',
-  },
-  saveButtonText: {
+  updateButtonText: {
     color: '#fff',
     fontSize: wp('4.5%'),
     fontFamily: fonts.regular400,

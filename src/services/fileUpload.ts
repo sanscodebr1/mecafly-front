@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import * as FileSystem from 'expo-file-system';
 
 /**
  * Faz upload de um arquivo local (React Native/Expo) para o Supabase Storage.
@@ -14,27 +15,31 @@ export async function uploadFileToSupabase(
   contentType = 'image/jpeg'
 ): Promise<string | null> {
   try {
-    // cria nome único
+    // Cria nome único
+    const fileExtension = contentType === 'image/jpeg' ? 'jpg' : 
+                         contentType === 'image/png' ? 'png' : 'jpg';
     const fileName = `${pathPrefix}${Date.now()}-${Math.random()
       .toString(36)
-      .substring(2, 8)}.jpg`;
+      .substring(2, 8)}.${fileExtension}`;
 
-    // monta arquivo compatível com FormData
-    const file = {
-      uri,
-      name: fileName,
-      type: contentType,
-    } as any;
+    // Lê o arquivo como base64
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
 
-    // usa FormData
-    const formData = new FormData();
-    formData.append('file', file);
+    // Converte base64 para Uint8Array
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const uint8Array = new Uint8Array(byteNumbers);
 
-    // faz upload usando o endpoint REST do Supabase Storage
+    // Upload usando Uint8Array
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(fileName, file, {
-        contentType,
+      .upload(fileName, uint8Array, {
+        contentType: contentType,
         upsert: true,
       });
 
@@ -43,8 +48,10 @@ export async function uploadFileToSupabase(
       return null;
     }
 
-    // gera URL pública
-    const { data: publicUrl } = supabase.storage.from(bucket).getPublicUrl(data.path);
+    // Gera URL pública
+    const { data: publicUrl } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(data.path);
 
     return publicUrl.publicUrl;
   } catch (err) {

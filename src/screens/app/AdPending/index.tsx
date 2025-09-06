@@ -20,7 +20,7 @@ export function AdPendingScreen() {
   };
 
   const handleGoToProducts = () => {
-    navigation.navigate('MyProductsFilled' as never);
+    navigation.navigate('MyProducts' as never);
   };
 
   return (

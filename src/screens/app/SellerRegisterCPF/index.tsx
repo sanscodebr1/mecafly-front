@@ -24,7 +24,7 @@ import { uploadFileToSupabase } from '../../../services/fileUpload';
 export function SellerRegisterCPFScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -83,6 +83,9 @@ export function SellerRegisterCPFScreen() {
         console.log('Erro ao criar store_profile:', error);
         return;
       }
+
+      // Atualizar o contexto de autenticação para refletir a mudança de tipo de usuário
+      await refreshUserProfile();
 
       console.log('Store_profile criado:', data?.id);
       navigation.navigate('SellerRegisterStore' as never);

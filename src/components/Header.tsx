@@ -84,9 +84,6 @@ export function Header({ activeTab = 'produtos', onTabPress, scrollY, useProfess
             />
           </Animated.View>
         </TouchableOpacity>
-
-        <UserStatusBadge />
-
         
         {/* Web: Navigation Tabs in Header */}
         {isWeb && (

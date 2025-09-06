@@ -48,6 +48,7 @@ import { DeliveryMethodScreen } from "../screens/app/DeliveryMethod";
 import { PaymentMethodProfessionalScreen } from "../screens/app/Professional/PaymentMethodProfessional";
 import { MyProductsFilledScreen } from "../screens/app/MyProductsFilled";
 import { EditProductScreen } from "../screens/app/editProduct";
+import { EditAddressScreen } from "../screens/app/EditAddress";
 import { DeactivateProductSuccessScreen } from "../screens/app/ProductDeactivateSuccess";
 import { MyOrdersScreen } from "../screens/app/MyOrders";
 import { OrderDetailScreen } from "../screens/app/OrderDetails";
@@ -106,6 +107,7 @@ export type RootStackParamList = {
   SellerRegisterStore: undefined;
   MyProductsFilled: undefined;
   EditProduct: undefined;
+  EditAddressScreen: undefined;
   DeactivateProductSuccess: undefined;
   MyOrders: undefined;
   OrderDetails: undefined;
@@ -178,6 +180,7 @@ return(
             <Stack.Screen name="Documents" component={DocumentsScreen}/>
             <Stack.Screen name="Login" component={LoginScreen}/>
             <Stack.Screen name="ProfessionalDocuments" component={ProfessionalDocuments}/>
+            <Stack.Screen name= "EditAddress" component={EditAddressScreen}/>
 
         </Stack.Navigator>
 

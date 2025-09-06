@@ -21,7 +21,7 @@ import { FileInputField } from '../../../components/FileInputField';
 import { uploadFileToSupabase } from '../../../services/fileUpload';
 
 export function SellerRegisterCNPJScreen() {
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
 
@@ -99,6 +99,9 @@ export function SellerRegisterCNPJScreen() {
         console.log('Erro ao criar loja:', error);
         return;
       }
+
+      // Atualizar o contexto de autenticação para refletir a mudança de tipo de usuário
+      await refreshUserProfile();
 
       console.log('Loja criada com sucesso');
       navigation.navigate('SellerRegisterStore' as never);

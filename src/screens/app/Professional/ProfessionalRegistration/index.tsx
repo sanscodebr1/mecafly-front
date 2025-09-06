@@ -17,14 +17,14 @@ import { InputField } from '../../../../components/InputField';
 import { BottomButton } from '../../../../components/BottomButton';
 import { fontsizes } from '../../../../constants/fontSizes';
 import { useAuth } from '../../../../context/AuthContext';
-import { supabase } from '../../../../lib/supabaseClient';
 import { FileInputField } from '../../../../components/FileInputField';
 import { uploadFileToSupabase } from '../../../../services/fileUpload';
 import { unmask } from '../../../../utils/masks';
+import { upsertProfessionalProfile } from '../../../../services/userProfiles';
 
 export function ProfessionalRegistrationScreen() {
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, refreshUserProfile, isProfessional, createProfessionalProfile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('profissionais');
@@ -42,28 +42,26 @@ export function ProfessionalRegistrationScreen() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-const toISODate = (br: string | null) => {
-  if (!br) return null;
-  const trimmed = br.trim(); // remove espaços
-  const parts = trimmed.split('/');
-  if (parts.length !== 3) return null;
+  const toISODate = (br: string | null) => {
+    if (!br) return null;
+    const trimmed = br.trim(); // remove espaços
+    const parts = trimmed.split('/');
+    if (parts.length !== 3) return null;
 
-  const [dd, mm, yyyy] = parts;
-  if (!dd || !mm || !yyyy) return null;
+    const [dd, mm, yyyy] = parts;
+    if (!dd || !mm || !yyyy) return null;
 
-  // valida se são números e dentro do range
-  const day = parseInt(dd, 10);
-  const month = parseInt(mm, 10);
-  const year = parseInt(yyyy, 10);
+    // valida se são números e dentro do range
+    const day = parseInt(dd, 10);
+    const month = parseInt(mm, 10);
+    const year = parseInt(yyyy, 10);
 
-  if (day < 1 || day > 31) return null;
-  if (month < 1 || month > 12) return null;
-  if (year < 1900 || year > 2100) return null;
+    if (day < 1 || day > 31) return null;
+    if (month < 1 || month > 12) return null;
+    if (year < 1900 || year > 2100) return null;
 
-  return `${year}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
-};
-
-
+    return `${year}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+  };
 
   const handleContinue = async () => {
     if (!user?.id) {
@@ -79,36 +77,56 @@ const toISODate = (br: string | null) => {
     try {
       let documentoUrl: string | null = null;
 
+      // Upload do documento se houver
       if (formData.documento) {
         documentoUrl = await uploadFileToSupabase(
           formData.documento,
-          'user_profile',
+          'professional_profile', // Atualizado para a nova tabela
           `documents/doc_identi_${user.id}/`
         );
       }
 
-      const payload = {
+      // Verificar se já existe perfil profissional
+      let professionalProfile = user.professional_profile;
+      
+      // Se não existe, criar usando a função do contexto
+      if (!professionalProfile) {
+        professionalProfile = await createProfessionalProfile();
+        if (!professionalProfile) {
+          console.error('Erro ao criar perfil profissional');
+          return;
+        }
+      }
+
+      // Atualizar o perfil profissional com os dados do formulário
+      const updatedProfile = await upsertProfessionalProfile({
         user_id: user.id,
-        user_type: 'professional' as const,
-        user_status: 'pending' as const,
+        user_type: 'professional',
         name: formData.nome || null,
+        email: user.email || null,
         document: unmask(formData.cpf) || null,
         date_of_birth: formData.dataNascimento ? toISODate(formData.dataNascimento) : null,
         phone_number: unmask(formData.telefone) || null,
         document_picture: documentoUrl,
-      };
+        description: null,
+        legal_representative: null,
+        company_type: null,
+        user_picture: null,
+      });
 
-      const { error } = await supabase.from('user_profiles').insert([payload]);
-
-      if (error) {
-        console.error('Erro ao criar cadastro profissional:', error);
+      if (!updatedProfile) {
+        console.error('Erro ao atualizar perfil profissional');
         return;
       }
 
-      console.log('Cadastro profissional criado com sucesso');
+      // Atualizar contexto de autenticação
+      await refreshUserProfile();
+
+      console.log('Cadastro profissional criado/atualizado com sucesso');
       navigation.navigate('ProfessionalProfile' as never);
-    } catch (e) {
-      console.log('Erro ao salvar cadastro profissional:', e);
+      
+    } catch (error) {
+      console.error('Erro ao salvar cadastro profissional:', error);
     } finally {
       setSubmitting(false);
     }
@@ -189,7 +207,7 @@ const toISODate = (br: string | null) => {
 
       <View style={styles.buttonContainer}>
         <BottomButton
-          title="Continuar"
+          title={submitting ? "Salvando..." : "Continuar"}
           onPress={handleContinue}
           disabled={!acceptTerms || submitting}
         />

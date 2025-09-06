@@ -5,6 +5,7 @@ import { useAppFonts } from './src/constants/fonts';
 import { View, Text, Alert } from 'react-native';
 import { SafeAreaProvider} from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
+import { ProductCreationProvider } from './src/context/ProductCreationContext';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -64,10 +65,12 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <AuthProvider>
-          <ErrorBoundary>
-            <StatusBar style="light" />
-            <Routes />
-          </ErrorBoundary>
+          <ProductCreationProvider>
+            <ErrorBoundary>
+              <StatusBar style="light" />
+              <Routes />
+            </ErrorBoundary>
+          </ProductCreationProvider>
         </AuthProvider>
       </SafeAreaProvider>
     );

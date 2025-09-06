@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -14,41 +16,54 @@ import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 import { SimpleHeader } from '../../../components/SimpleHeader';
 import { BottomButton } from '../../../components/BottomButton';
 import { Colors } from '../../../constants/colors';
+import { getProductCategories, ProductCategory } from '../../../services/productServices';
+import { useProductCreation } from '../../../context/ProductCreationContext';
 
 export function AddProductScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const { setSelectedCategory } = useProductCreation();
+  
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const categoriesData = await getProductCategories();
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      Alert.alert('Erro', 'Não foi possível carregar as categorias');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleBackPress = () => {
     navigation.goBack();
   };
 
-  const handleCategoryPress = (category: string) => {
-    setSelectedCategory(category);
+  const handleCategoryPress = (category: ProductCategory) => {
+    setSelectedCategoryId(category.id);
   };
 
   const handleContinue = () => {
-    if (selectedCategory) {
-      console.log('Selected category:', selectedCategory);
-      navigation.navigate('AddProductDetails' as never);
+    if (selectedCategoryId) {
+      const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
+      if (selectedCategory) {
+        setSelectedCategory({ id: selectedCategory.id, name: selectedCategory.name });
+        navigation.navigate('AddProductDetails' as never);
+      }
     }
   };
 
-  const categories = [
-    { id: 'drone', name: 'Drone' },
-    { id: 'controles', name: 'Controles' },
-    { id: 'insumos', name: 'Insumos' },
-    { id: 'helices', name: 'Hélices' },
-    { id: 'drone2', name: 'Drone' },
-    { id: 'controles2', name: 'Controles' },
-    { id: 'category7', name: '' },
-    { id: 'category8', name: '' },
-  ];
-
-  const renderCategoryButton = (category: any) => {
-    const isSelected = selectedCategory === category.id;
-    const isEmpty = !category.name;
+  const renderCategoryButton = (category: ProductCategory) => {
+    const isSelected = selectedCategoryId === category.id;
     
     return (
       <TouchableOpacity
@@ -56,29 +71,34 @@ export function AddProductScreen() {
         style={[
           styles.categoryButton,
           isSelected && styles.selectedCategoryButton,
-          isEmpty && styles.emptyCategoryButton,
         ]}
-        onPress={() => !isEmpty && handleCategoryPress(category.id)}
-        disabled={isEmpty}
+        onPress={() => handleCategoryPress(category)}
       >
-        {!isEmpty && (
-          <Text style={[
-            styles.categoryText,
-            isSelected && styles.selectedCategoryText
-          ]}>
-            {category.name}
-          </Text>
-        )}
+        <Text style={[
+          styles.categoryText,
+          isSelected && styles.selectedCategoryText
+        ]}>
+          {category.name}
+        </Text>
       </TouchableOpacity>
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#22D883" />
+        <Text style={styles.loadingText}>Carregando categorias...</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
-  {/* Header */}
-          <View style={styles.header}>
-          <SimpleHeader title="Cadastro produto" />
-          </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <SimpleHeader title="Cadastro produto" onBack={handleBackPress} />
+      </View>
 
       {/* Content */}
       <ScrollView 
@@ -94,6 +114,10 @@ export function AddProductScreen() {
           {/* Category Grid */}
           <View style={styles.categoryGrid}>
             {categories.map(renderCategoryButton)}
+            {/* Fill empty slots for layout */}
+            {categories.length % 2 === 1 && (
+              <View style={[styles.categoryButton, styles.emptyCategoryButton]} />
+            )}
           </View>
         </View>
       </ScrollView>
@@ -103,8 +127,8 @@ export function AddProductScreen() {
         <BottomButton
           title="Prosseguir"
           onPress={handleContinue}
-          disabled={!selectedCategory}
-          style={StyleSheet.flatten([styles.continueButton, !selectedCategory && styles.disabledButton])}
+          disabled={!selectedCategoryId}
+          style={StyleSheet.flatten([styles.continueButton, !selectedCategoryId && styles.disabledButton])}
           textStyle={styles.continueButtonText}
         />
       </View>
@@ -126,36 +150,6 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       paddingHorizontal: wp('3%'),
       paddingVertical: hp('1%'),
-    }),
-  },
-  backButton: {
-    padding: wp('2%'),
-    ...(isWeb && {
-      padding: wp('1%'),
-    }),
-  },
-  backIcon: {
-    paddingBottom: hp('1.6%'),
-    fontSize: wp('6%'),
-    color: '#000000',
-    fontWeight: 'bold',
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  headerTitle: {
-    fontSize: wp('5%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    flex: 1,
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  placeholder: {
-    width: wp('6%'),
-    ...(isWeb && {
-      width: wp('4%'),
     }),
   },
   scrollView: {
@@ -206,7 +200,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryRed,
   },
   emptyCategoryButton: {
-    backgroundColor: '#C4C4C4',
+    backgroundColor: 'transparent',
   },
   categoryText: {
     fontSize: wp('4%'),
@@ -248,5 +242,11 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       fontSize: wp('3.5%'),
     }),
+  },
+  loadingText: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginTop: hp('2%'),
   },
 });

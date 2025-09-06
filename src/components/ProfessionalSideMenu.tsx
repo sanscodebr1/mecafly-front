@@ -30,13 +30,12 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
   const [showMenuOptions, setShowMenuOptions] = useState(false);
   const slideAnim = React.useRef(new Animated.Value(-wp('80%'))).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  
-// rótulos e ações dos CTAs dinâmicos
-const sellerCtaLabel = isSeller ? 'Área do Vendedor' : 'Tornar-se um Vendedor';
-const sellerCtaNavigateTo = isSeller ? 'SellerArea' : 'SellerRegistration';
 
-const professionalCtaLabel = isProfessional ? 'Área do Profissional' : 'Tornar-se um Profissional';
-const professionalCtaNavigateTo = isProfessional ? 'ProfessionalArea' : 'ProfessionalRegistration';
+  const sellerCtaLabel = isSeller ? 'Área do Vendedor' : 'Tornar-se um Vendedor';
+  const sellerCtaNavigateTo = isSeller ? 'SellerArea' : 'SellerRegistration';
+
+  const professionalCtaLabel = isProfessional ? 'Área do Profissional' : 'Tornar-se um Profissional';
+  const professionalCtaNavigateTo = isProfessional ? 'ProfessionalArea' : 'ProfessionalRegistration';
 
   React.useEffect(() => {
     if (isVisible) {
@@ -54,10 +53,8 @@ const professionalCtaNavigateTo = isProfessional ? 'ProfessionalArea' : 'Profess
 
   const handleLoginPress = () => {
     if (isLoggedIn) {
-      // Se já está logado, mostra as opções do menu
       setShowMenuOptions(true);
     } else {
-      // Se não está logado, navega para a tela de login
       onClose();
       navigation.navigate('Login' as never);
     }
@@ -67,11 +64,9 @@ const professionalCtaNavigateTo = isProfessional ? 'ProfessionalArea' : 'Profess
 
   const handleMeusDadosPress = () => {
     if (isLoggedIn) {
-      // Usuário está logado, navega para ProfessionalProfile
-      navigation.navigate('ProfessionalProfile' as never);
+      navigation.navigate('MyProfiles' as never);
       onClose();
     } else {
-      // Usuário não está logado, mostra alerta
       Alert.alert(
         'Login Necessário',
         'Você precisa estar logado para acessar seus dados. Deseja fazer login?',
@@ -95,115 +90,115 @@ const professionalCtaNavigateTo = isProfessional ? 'ProfessionalArea' : 'Profess
 
   return (
     <View style={styles.container}>
-    {/* Backdrop */}
-    <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]} onTouchEnd={onClose} />
+      {/* Backdrop */}
+      <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]} onTouchEnd={onClose} />
 
-    {/* Menu Content */}
-    <Animated.View style={[styles.menuContainer, { transform: [{ translateX: slideAnim }] }]}>
-      {/* Header with Logo and Hamburger */}
-      <View style={styles.menuHeader}>
-        <View style={styles.logoContainer}>
-          <Image
-            source={require('../assets/images/logo.png')}
-            style={styles.menuLogo}
-            resizeMode="contain"
-          />
+      {/* Menu Content */}
+      <Animated.View style={[styles.menuContainer, { transform: [{ translateX: slideAnim }] }]}>
+        {/* Header with Logo and Hamburger */}
+        <View style={styles.menuHeader}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../assets/images/logo.png')}
+              style={styles.menuLogo}
+              resizeMode="contain"
+            />
+          </View>
+
+          <TouchableOpacity style={styles.hamburgerButton} onPress={onClose}>
+            <Text style={styles.hamburgerIcon}>☰</Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.hamburgerButton} onPress={onClose}>
-          <Text style={styles.hamburgerIcon}>☰</Text>
-        </TouchableOpacity>
-      </View>
-
-     {!isLoggedIn ? (
-  // NÃO logado
-  <View style={styles.loginSection}>
-    <TouchableOpacity style={styles.loginButton} onPress={handleLoginPress}>
-      <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
-      <Text style={styles.loginText}>Login/Cadastre-se</Text>
-    </TouchableOpacity>
-  </View>
-) : (
-  // LOGADO
-  <View style={styles.menuOptionsSection}>
-    {/* Botão de perfil */}
-    <TouchableOpacity
+        {!isLoggedIn ? (
+          // NÃO logado
+          <View style={styles.loginSection}>
+            <TouchableOpacity style={styles.loginButton} onPress={handleLoginPress}>
+              <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
+              <Text style={styles.loginText}>Login/Cadastre-se</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          // LOGADO
+          <View style={styles.menuOptionsSection}>
+            {/* Botão de perfil */}
+            {/*     <TouchableOpacity
       style={styles.menuOption}
       onPress={() => navigation.navigate('MyProfiles' as never)}
     >
       <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
       <Text style={styles.menuOptionText}>Meu Perfil</Text>
-    </TouchableOpacity>
+    </TouchableOpacity> */}
 
-    {/* Opções comuns */}
-    <TouchableOpacity style={styles.menuOption} onPress={handleMeusDadosPress}>
-      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
-      <Text style={styles.menuOptionText}>Meus Dados</Text>
-    </TouchableOpacity>
+            {/* Opções comuns */}
+            <TouchableOpacity style={styles.menuOption} onPress={handleMeusDadosPress}>
+              <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+              <Text style={styles.menuOptionText}>Meus Dados</Text>
+            </TouchableOpacity>
 
-    <TouchableOpacity
-      style={styles.menuOption}
-      onPress={() => navigation.navigate('MyAddresses' as never)}
-    >
-      <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
-      <Text style={styles.menuOptionText}>Meus Endereços</Text>
-    </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate('MyAddresses' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
+              <Text style={styles.menuOptionText}>Meus Endereços</Text>
+            </TouchableOpacity>
 
-    <TouchableOpacity
+            {/*     <TouchableOpacity
       style={styles.menuOption}
       onPress={() => navigation.navigate('MyContracts' as never)}
     >
       <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
       <Text style={styles.menuOptionText}>Minhas contratações</Text>
-    </TouchableOpacity>
+    </TouchableOpacity> */}
 
-    <TouchableOpacity
-      style={styles.menuOption}
-      onPress={() => navigation.navigate('Documents' as never)}
-    >
-      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
-      <Text style={styles.menuOptionText}>Documentos</Text>
-    </TouchableOpacity>
+{/*             <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate('Documents' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+              <Text style={styles.menuOptionText}>Documentos</Text>
+            </TouchableOpacity> */}
 
-    <TouchableOpacity
-      style={styles.menuOption}
-      onPress={() => navigation.navigate('ChangePassword' as never)}
-    >
-      <Image style={styles.navIcon} source={require('../assets/icons/keygray.png')} />
-      <Text style={styles.menuOptionText}>Alterar Senha</Text>
-    </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate('ChangePassword' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/keygray.png')} />
+              <Text style={styles.menuOptionText}>Alterar Senha</Text>
+            </TouchableOpacity>
 
-    {/* Dinâmicos: vendedor / profissional */}
-    <TouchableOpacity
-      style={styles.menuOption}
-      onPress={() => navigation.navigate(isSeller ? 'SellerArea' as never : 'SellerRegister' as never)}
-    >
-      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
-      <Text style={styles.menuOptionText}>
-        {isSeller ? 'Área do Vendedor' : 'Tornar-se um Vendedor'}
-      </Text>
-    </TouchableOpacity>
+            {/* Dinâmicos: vendedor / profissional */}
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate(isSeller ? 'SellerArea' as never : 'SellerRegister' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+              <Text style={styles.menuOptionText}>
+                {isSeller ? 'Área do Vendedor' : 'Tornar-se um Vendedor'}
+              </Text>
+            </TouchableOpacity>
 
-    <TouchableOpacity
-      style={styles.menuOption}
-      onPress={() => navigation.navigate(isProfessional ? 'ProfessionalArea' as never : 'ProfessionalRegistration' as never)}
-    >
-      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
-      <Text style={styles.menuOptionText}>
-        {isProfessional ? 'Área do Profissional' : 'Tornar-se um Profissional'}
-      </Text>
-    </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate(isProfessional ? 'ProfessionalArea' as never : 'ProfessionalRegistration' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+              <Text style={styles.menuOptionText}>
+                {isProfessional ? 'Área do Profissional' : 'Tornar-se um Profissional'}
+              </Text>
+            </TouchableOpacity>
 
-    {/* Logout */}
-    <TouchableOpacity style={styles.menuOption} onPress={signOut}>
-      <Image style={styles.navIcon} source={require('../assets/icons/keygray.png')} />
-      <Text style={styles.menuOptionText}>Sair</Text>
-    </TouchableOpacity>
-  </View>
-)}
+            {/* Logout */}
+            <TouchableOpacity style={styles.menuOption} onPress={signOut}>
+              <Image style={styles.navIcon} source={require('../assets/icons/keygray.png')} />
+              <Text style={styles.menuOptionText}>Sair</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-    </Animated.View>
-  </View>
+      </Animated.View>
+    </View>
   );
 }
 
