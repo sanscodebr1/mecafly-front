@@ -131,6 +131,13 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
     </TouchableOpacity> */}
 
             {/* Opções comuns */}
+             <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate('Home' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
+              <Text style={styles.menuOptionText}>Início</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.menuOption} onPress={handleMeusDadosPress}>
               <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
               <Text style={styles.menuOptionText}>Meus Dados</Text>

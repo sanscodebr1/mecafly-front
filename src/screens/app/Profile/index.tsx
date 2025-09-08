@@ -9,6 +9,7 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  ScrollView, // 👈 import
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -19,7 +20,7 @@ import { SimpleHeader } from '../../../components/SimpleHeader';
 import { BottomButton } from '../../../components/BottomButton';
 import { InputField } from '../../../components/InputField';
 import { getCurrentStoreProfile, upsertStoreProfile, StoreProfile } from '../../../services/userProfiles';
-import { uploadUserProfileImage } from '../../../services/storage'; // Using same service as professional profile
+import { uploadUserProfileImage } from '../../../services/storage';
 import { supabase } from '../../../lib/supabaseClient';
 
 export function ProfileScreen() {
@@ -33,7 +34,6 @@ export function ProfileScreen() {
   const [hasChanges, setHasChanges] = useState(false);
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
 
-  // Estados iniciais para comparação
   const [initialData, setInitialData] = useState({
     storeName: '',
     description: '',
@@ -45,13 +45,11 @@ export function ProfileScreen() {
   }, []);
 
   useEffect(() => {
-    // Verifica se houve mudanças nos dados
     const currentData = {
       storeName,
       description,
       profileImageUrl: localImageUri || profileImageUrl,
     };
-
     const changed = JSON.stringify(currentData) !== JSON.stringify(initialData);
     setHasChanges(changed);
   }, [storeName, description, profileImageUrl, localImageUri, initialData]);
@@ -67,7 +65,6 @@ export function ProfileScreen() {
         setDescription(profile.description || '');
         setProfileImageUrl(profile.picture || undefined);
         
-        // Define dados iniciais
         const data = {
           storeName: profile.name || '',
           description: profile.description || '',
@@ -98,7 +95,6 @@ export function ProfileScreen() {
     }
   };
 
-  // Using same approach as professional profile
   const handlePhotoUpload = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -117,7 +113,7 @@ export function ProfileScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        setLocalImageUri(asset.uri); // Set local preview immediately
+        setLocalImageUri(asset.uri);
       }
     } catch (error) {
       console.error('Erro ao selecionar imagem:', error);
@@ -141,13 +137,12 @@ export function ProfileScreen() {
 
       let finalImageUrl = profileImageUrl;
 
-      // Handle image upload like professional profile
       if (localImageUri) {
         try {
           finalImageUrl = await uploadUserProfileImage(user.id, localImageUri);
           if (finalImageUrl) {
             setProfileImageUrl(finalImageUrl);
-            setLocalImageUri(undefined); // Clear local URI after successful upload
+            setLocalImageUri(undefined);
           }
         } catch (uploadError) {
           console.error('Erro no upload da imagem:', uploadError);
@@ -155,13 +150,11 @@ export function ProfileScreen() {
         }
       }
 
-      // Prepara dados para salvar
       const profileData: Partial<StoreProfile> & { user_id: string } = {
         user_id: user.id,
         name: storeName.trim() || null,
         description: description.trim() || null,
         picture: finalImageUrl || null,
-        // Mantém outros dados existentes se houver
         ...(storeProfile && {
           document: storeProfile.document,
           company_type: storeProfile.company_type,
@@ -178,7 +171,6 @@ export function ProfileScreen() {
       const savedProfile = await upsertStoreProfile(profileData);
       setStoreProfile(savedProfile);
       
-      // Atualiza dados iniciais
       const newInitialData = {
         storeName: savedProfile.name || '',
         description: savedProfile.description || '',
@@ -196,7 +188,6 @@ export function ProfileScreen() {
     }
   };
 
-  // Image source logic like professional profile
   const getImageSource = () => {
     if (localImageUri) {
       return { uri: localImageUri };
@@ -227,34 +218,13 @@ export function ProfileScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.contentContainer}>
-          {/* Store Name */}
-          <InputField
-            label="Nome da loja"
-            value={storeName}
-            onChangeText={setStoreName}
-            placeholder="Digite o nome da sua loja"
-            placeholderTextColor="#999"
-            multiline={false}
-          />
-
-          {/* Description */}
-          <InputField
-            label="Descrição"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Descreva sua loja..."
-            placeholderTextColor="#999"
-            multiline={true}
-            numberOfLines={6}
-            textAlignVertical="top"
-            containerStyle={{ marginTop: hp('3%') }}
-            labelStyle={{marginTop: hp('-3%')}}
-            inputStyle={[styles.textInput, styles.textArea]}
-          />
-
+        {/* 👇 ScrollView com paddingBottom para dar espaço após o último input */}
+        <ScrollView
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Profile Photo */}
-          <Text style={styles.photoLabel}>Foto do perfil:</Text>
+          <Text style={styles.photoLabel}>Foto de perfil:</Text>
           <TouchableOpacity 
             style={styles.photoBox} 
             onPress={handlePhotoUpload} 
@@ -279,7 +249,32 @@ export function ProfileScreen() {
               <Text style={styles.changePhotoText}>Alterar foto</Text>
             </TouchableOpacity>
           )}
-        </View>
+
+          {/* Store Name */}
+          <InputField
+            label="Nome da loja"
+            value={storeName}
+            onChangeText={setStoreName}
+            placeholder="Digite o nome da sua loja"
+            placeholderTextColor="#999"
+            multiline={false}
+          />
+
+          {/* Description */}
+          <InputField
+            label="Descrição"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Descreva sua loja..."
+            placeholderTextColor="#999"
+            multiline={true}
+            numberOfLines={6}
+            textAlignVertical="top"
+            containerStyle={{ marginTop: hp('3%') }}
+            labelStyle={{ marginTop: hp('-3%') }}
+            inputStyle={[styles.textInput, styles.textArea]}
+          />
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Save Button */}
@@ -315,9 +310,11 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('2%'),
+    paddingBottom: hp('16%'), // 👈 espaço extra abaixo do último input
     ...(isWeb && {
       paddingHorizontal: wp('3%'),
       paddingVertical: hp('1%'),
+      paddingBottom: hp('12%'), // 👈 ajuste no web
     }),
   },
   photoLabel: {
@@ -341,7 +338,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: hp('2%'),
-    overflow: 'hidden', // Added to ensure image fits properly
+    overflow: 'hidden',
     ...(isWeb && {
       width: wp('22%'),
       height: wp('22%'),

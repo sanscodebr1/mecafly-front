@@ -20,6 +20,8 @@ import { fontsizes } from '../../../constants/fontSizes';
 import { Colors } from '../../../constants/colors';
 import { getProductDetail, ProductDetail } from '../../../services/productServices';
 import { addToCart, isProductInCart } from '../../../services/cart';
+import ProductQuestionsList from '../../../components/ProductQuestionsList';
+
 
 interface RouteParams {
   productId: string;
@@ -322,7 +324,8 @@ export function ProductDetailScreen() {
             </View>
           </View>
         </View>
-
+        
+                
         {/* Description Section */}
         <View style={styles.descriptionContainer}>
           <Text style={styles.sectionTitle}>Descrição</Text>
@@ -330,7 +333,25 @@ export function ProductDetailScreen() {
             {product.product_description}
           </Text>
         </View>
+        {/* Q&A shortcut */}
+     <View style={styles.qaSection}>
+          <Text style={styles.sectionTitle}>Perguntas e respostas</Text>
 
+  <TouchableOpacity
+    style={styles.viewAllBtn}
+    activeOpacity={0.7}
+onPress={() =>
+  (navigation as any).navigate("ProductQuestions", { 
+    productId, 
+    storeProfileId: product?.store_id 
+  })
+}  >
+    <Text style={styles.viewAllText}>Ver todas as perguntas</Text>
+    <Text style={styles.arrow}>›</Text>
+  </TouchableOpacity>
+</View>
+
+     
         {/* Reviews Section */}
         <View style={styles.reviewsContainer}>
           <Text style={styles.sectionTitle}>Avaliações</Text>
@@ -359,6 +380,10 @@ export function ProductDetailScreen() {
     </SafeAreaView>
   );
 }
+
+// const styles = StyleSheet.create({
+
+const SECTION_SPACING = hp('3.75%');
 
 const styles = StyleSheet.create({
   container: {
@@ -457,10 +482,10 @@ const styles = StyleSheet.create({
   },
   productImageContainer: {
     paddingHorizontal: wp('5%'),
-    marginBottom: hp('2.5%'),
+    marginBottom: SECTION_SPACING,
     ...(isWeb && {
       paddingHorizontal: wp('2%'),
-      marginBottom: hp('1.5%'),
+      marginBottom: hp('2%'),
     }),
   },
   productImage: {
@@ -489,10 +514,10 @@ const styles = StyleSheet.create({
   },
   productInfoContainer: {
     paddingHorizontal: wp('5%'),
-    marginBottom: hp('2.5%'),
+    marginBottom: SECTION_SPACING,
     ...(isWeb && {
       paddingHorizontal: wp('2%'),
-      marginBottom: hp('1.5%'),
+      marginBottom: hp('2%'),
     }),
   },
   productName: {
@@ -550,10 +575,10 @@ const styles = StyleSheet.create({
   },
   outOfStockContainer: {
     paddingHorizontal: wp('5%'),
-    marginBottom: hp('2.5%'),
+    marginBottom: SECTION_SPACING,
     ...(isWeb && {
       paddingHorizontal: wp('2%'),
-      marginBottom: hp('1.5%'),
+      marginBottom: hp('2%'),
     }),
   },
   outOfStockText: {
@@ -570,10 +595,10 @@ const styles = StyleSheet.create({
   },
   storeContainer: {
     paddingHorizontal: wp('5%'),
-    marginBottom: hp('2.5%'),
+    marginBottom: SECTION_SPACING,
     ...(isWeb && {
       paddingHorizontal: wp('2%'),
-      marginBottom: hp('1.5%'),
+      marginBottom: hp('2%'),
     }),
   },
   storeInfo: {
@@ -628,7 +653,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: wp('5%'),
-    marginBottom: hp('3.75%'),
+    marginBottom: SECTION_SPACING,
   },
   quantityContainer: {
     flexDirection: 'row',
@@ -718,7 +743,7 @@ const styles = StyleSheet.create({
   },
   descriptionContainer: {
     paddingHorizontal: wp('5%'),
-    marginBottom: hp('3.75%'),
+    marginBottom: SECTION_SPACING,
     ...(isWeb && {
       paddingHorizontal: wp('2%'),
       marginBottom: hp('2%'),
@@ -745,12 +770,48 @@ const styles = StyleSheet.create({
       lineHeight: hp('2%'),
     }),
   },
+  qaSection: {
+    paddingHorizontal: wp('5%'),
+    marginBottom: SECTION_SPACING,
+    ...(isWeb && {
+      paddingHorizontal: wp('2%'),
+      marginBottom: hp('2%'),
+    }),
+  },
+  qaTitle: {
+    fontSize: 16,
+    fontFamily: fonts.semiBold600,
+    color: "#000",
+    marginBottom: 10,
+  },
+  viewAllBtn: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  viewAllText: {
+    fontSize: 15,
+    fontFamily: fonts.medium500,
+    color: Colors.primaryRed,
+  },
+  arrow: {
+    fontSize: 18,
+    color: "#999",
+  },
   reviewsContainer: {
     paddingHorizontal: wp('5%'),
     paddingBottom: hp('12.5%'),
+    marginBottom: SECTION_SPACING,
     ...(isWeb && {
       paddingHorizontal: wp('2%'),
       paddingBottom: hp('4%'),
+      marginBottom: hp('2%'),
     }),
   },
   reviewItem: {
@@ -823,3 +884,502 @@ const styles = StyleSheet.create({
     top: 0,
   },
 });
+
+//   container: {
+//     flex: 1,
+//     backgroundColor: '#fff',
+//   },
+//   scrollView: {
+//     flex: 1,
+//     ...(isWeb && {
+//       marginHorizontal: wp('2%'),
+//     }),
+//   },
+//   loadingContainer: {
+//     flex: 1,
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//     paddingHorizontal: wp('5%'),
+//   },
+//   loadingText: {
+//     marginTop: hp('2%'),
+//     fontSize: wp('3.5%'),
+//     fontFamily: fonts.regular400,
+//     color: '#666',
+//     textAlign: 'center',
+//   },
+//   errorContainer: {
+//     flex: 1,
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//     paddingHorizontal: wp('5%'),
+//   },
+//   errorText: {
+//     fontSize: wp('4%'),
+//     fontFamily: fonts.regular400,
+//     color: '#FF6B6B',
+//     textAlign: 'center',
+//     marginBottom: hp('3%'),
+//   },
+//   retryButton: {
+//     backgroundColor: Colors.primaryRed,
+//     paddingHorizontal: wp('6%'),
+//     paddingVertical: hp('1.5%'),
+//     borderRadius: wp('2%'),
+//     marginBottom: hp('2%'),
+//   },
+//   retryText: {
+//     color: '#fff',
+//     fontSize: wp('3.5%'),
+//     fontFamily: fonts.medium500,
+//   },
+//   backButton: {
+//     backgroundColor: '#f0f0f0',
+//     paddingHorizontal: wp('6%'),
+//     paddingVertical: hp('1.5%'),
+//     borderRadius: wp('2%'),
+//   },
+//   backText: {
+//     color: '#666',
+//     fontSize: wp('3.5%'),
+//     fontFamily: fonts.medium500,
+//   },
+//   breadcrumbsContainer: {
+//     paddingHorizontal: wp('5%'),
+//     paddingVertical: hp('1.25%'),
+//     ...(isWeb && {
+//       paddingHorizontal: wp('2%'),
+//       paddingVertical: hp('0.75%'),
+//     }),
+//   },
+//   breadcrumbsText: {
+//     fontSize: fontsizes.size14,
+//     textAlign: 'center',
+//     fontFamily: fonts.regular400,
+//     color: '#666',
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//       textAlign: 'center' as any,
+//     }),
+//   },
+//   titleContainer: {
+//     paddingHorizontal: wp('5%'),
+//     paddingVertical: hp('1.25%'),
+//     ...(isWeb && {
+//       paddingHorizontal: wp('2%'),
+//       paddingVertical: hp('0.75%'),
+//     }),
+//   },
+//   pageTitle: {
+//     fontSize: fontsizes.size20,
+//     fontFamily: fonts.bold700,
+//     color: '#000000',
+//     textAlign: 'center',
+//     ...(isWeb && {
+//       fontSize: wp('4.5%'),
+//     }),
+//   },
+//   productImageContainer: {
+//     paddingHorizontal: wp('5%'),
+//     marginBottom: hp('2.5%'),
+//     ...(isWeb && {
+//       paddingHorizontal: wp('2%'),
+//       marginBottom: hp('1.5%'),
+//     }),
+//   },
+//   productImage: {
+//     height: hp('25%'),
+//     width: '100%',
+//     borderRadius: wp('3%'),
+//     backgroundColor: '#f5f5f5',
+//     ...(isWeb && {
+//       height: hp('20%'),
+//     }),
+//   },
+//   productImagePlaceholder: {
+//     height: hp('25%'),
+//     backgroundColor: '#D6DBDE',
+//     borderRadius: wp('3%'),
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//     ...(isWeb && {
+//       height: hp('20%'),
+//     }),
+//   },
+//   placeholderText: {
+//     fontSize: wp('4%'),
+//     fontFamily: fonts.regular400,
+//     color: '#666',
+//   },
+//   productInfoContainer: {
+//     paddingHorizontal: wp('5%'),
+//     marginBottom: hp('2.5%'),
+//     ...(isWeb && {
+//       paddingHorizontal: wp('2%'),
+//       marginBottom: hp('1.5%'),
+//     }),
+//   },
+//   productName: {
+//     fontSize: fontsizes.size24,
+//     fontFamily: fonts.light300,
+//     color: '#000000',
+//     marginBottom: hp('0.5%'),
+//     ...(isWeb && {
+//       fontSize: wp('4.5%'),
+//     }),
+//   },
+//   productBrand: {
+//     fontSize: fontsizes.size16,
+//     fontFamily: fonts.medium500,
+//     color: '#000000',
+//     marginBottom: hp('1%'),
+//     ...(isWeb && {
+//       fontSize: wp('3.2%'),
+//     }),
+//   },
+//   productPrice: {
+//     fontSize: fontsizes.size24,
+//     fontFamily: fonts.semiBold600,
+//     color: '#000000',
+//     marginBottom: hp('0.5%'),
+//     ...(isWeb && {
+//       fontSize: wp('5.5%'),
+//     }),
+//   },
+//   productInstallment: {
+//     fontSize: fontsizes.size16,
+//     fontFamily: fonts.light300,
+//     color: '#000000',
+//     marginBottom: hp('1%'),
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//     }),
+//   },
+//   stockInfo: {
+//     fontSize: fontsizes.size14,
+//     fontFamily: fonts.medium500,
+//     color: '#22D883',
+//     marginBottom: hp('0.5%'),
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//     }),
+//   },
+//   cartStatus: {
+//     fontSize: fontsizes.size14,
+//     fontFamily: fonts.medium500,
+//     color: '#FF6B35',
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//     }),
+//   },
+//   outOfStockContainer: {
+//     paddingHorizontal: wp('5%'),
+//     marginBottom: hp('2.5%'),
+//     ...(isWeb && {
+//       paddingHorizontal: wp('2%'),
+//       marginBottom: hp('1.5%'),
+//     }),
+//   },
+//   outOfStockText: {
+//     fontSize: fontsizes.size16,
+//     fontFamily: fonts.semiBold600,
+//     color: '#FF6B6B',
+//     textAlign: 'center',
+//     backgroundColor: '#FFE6E6',
+//     padding: wp('3%'),
+//     borderRadius: wp('2%'),
+//     ...(isWeb && {
+//       fontSize: wp('3%'),
+//     }),
+//   },
+//   storeContainer: {
+//     paddingHorizontal: wp('5%'),
+//     marginBottom: hp('2.5%'),
+//     ...(isWeb && {
+//       paddingHorizontal: wp('2%'),
+//       marginBottom: hp('1.5%'),
+//     }),
+//   },
+//   storeInfo: {
+//     flexDirection: 'row',
+//     alignItems: 'center',
+//     backgroundColor: '#f9f9f9',
+//     padding: wp('3%'),
+//     borderRadius: wp('2%'),
+//   },
+//   storeImage: {
+//     width: wp('12%'),
+//     height: wp('12%'),
+//     borderRadius: wp('6%'),
+//     marginRight: wp('3%'),
+//   },
+//   storeImagePlaceholder: {
+//     width: wp('12%'),
+//     height: wp('12%'),
+//     borderRadius: wp('6%'),
+//     backgroundColor: Colors.primaryRed,
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//     marginRight: wp('3%'),
+//   },
+//   storeInitial: {
+//     color: '#fff',
+//     fontSize: wp('5%'),
+//     fontFamily: fonts.bold700,
+//   },
+//   storeDetails: {
+//     flex: 1,
+//   },
+//   storeName: {
+//     fontSize: wp('3.8%'),
+//     fontFamily: fonts.semiBold600,
+//     color: '#000',
+//     marginBottom: hp('0.2%'),
+//   },
+//   companyName: {
+//     fontSize: wp('3.2%'),
+//     fontFamily: fonts.regular400,
+//     color: '#666',
+//     marginBottom: hp('0.2%'),
+//   },
+//   storePhone: {
+//     fontSize: wp('3.2%'),
+//     fontFamily: fonts.regular400,
+//     color: '#666',
+//   },
+//   actionContainer: {
+//     flexDirection: 'row',
+//     justifyContent: 'space-between',
+//     alignItems: 'center',
+//     paddingHorizontal: wp('5%'),
+//     marginBottom: hp('3.75%'),
+//   },
+//   quantityContainer: {
+//     flexDirection: 'row',
+//     alignItems: 'center',
+//     justifyContent: 'space-between',
+//     backgroundColor: '#D6DBDE',
+//     borderRadius: wp('8%'),
+//     paddingHorizontal: wp('2%'),
+//     minWidth: wp('30%'),
+//     paddingVertical: hp('1%'),
+//   },
+//   quantityButton: {
+//     width: wp('8%'),
+//     height: wp('8%'),
+//     borderRadius: wp('4%'),
+//     backgroundColor: '#fff',
+//     alignItems: 'center',
+//     justifyContent: 'center',
+//     marginHorizontal: wp('1%'),
+//     ...(isWeb && {
+//       width: wp('4%'),
+//       height: wp('4%'),
+//       borderRadius: wp('2%'),
+//       marginHorizontal: wp('0.5%'),
+//     }),
+//   },
+//   disabledButton: {
+//     backgroundColor: '#f0f0f0',
+//     opacity: 0.5,
+//   },
+//   quantityButtonText: {
+//     fontSize: fontsizes.size16,
+//     fontFamily: fonts.bold700,
+//     color: '#000000',
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//     }),
+//   },
+//   quantityText: {
+//     fontSize: fontsizes.size18,
+//     fontFamily: fonts.medium500,
+//     color: '#000000',
+//     marginHorizontal: wp('4%'),
+//     ...(isWeb && {
+//       fontSize: wp('2.5%'),
+//       marginHorizontal: wp('3%'),
+//     }),
+//   },
+//   buttonsContainer: {
+//     gap: hp('1%'),
+//   },
+//   addToCartButton: {
+//     backgroundColor: '#FF6B35',
+//     borderRadius: wp('7%'),
+//     paddingVertical: hp('1.5%'),
+//     paddingHorizontal: wp('4%'),
+//     alignItems: 'center',
+//     ...(isWeb && {
+//       paddingVertical: hp('0.75%'),
+//       paddingHorizontal: wp('3%'),
+//     }),
+//   },
+//   addToCartButtonText: {
+//     color: '#fff',
+//     fontSize: fontsizes.size16,
+//     fontFamily: fonts.regular400,
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//     }),
+//   },
+//   buyButton: {
+//     backgroundColor: '#22D883',
+//     borderRadius: wp('7%'),
+//     paddingVertical: hp('1.5%'),
+//     paddingHorizontal: wp('4%'),
+//     alignItems: 'center',
+//     flex: 1,
+//     marginLeft: wp('3%'),
+//   },
+//   buyButtonText: {
+//     color: '#fff',
+//     fontSize: fontsizes.size18,
+//     fontFamily: fonts.regular400,
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//     }),
+//   },
+//   descriptionContainer: {
+//     paddingHorizontal: wp('5%'),
+//     marginBottom: hp('3.75%'),
+//     ...(isWeb && {
+//       paddingHorizontal: wp('2%'),
+//       marginBottom: hp('2%'),
+//     }),
+//   },
+//   sectionTitle: {
+//     fontSize: fontsizes.size18,
+//     fontFamily: fonts.semiBold600,
+//     color: '#000000',
+//     marginBottom: hp('2%'),
+//     ...(isWeb && {
+//       fontSize: wp('3.5%'),
+//       marginBottom: hp('1%'),
+//     }),
+//   },
+//   descriptionText: {
+//     fontSize: fontsizes.size14,
+//     fontFamily: fonts.regular400,
+//     color: '#000000',
+//     lineHeight: hp('2.5%'),
+//     marginBottom: hp('2%'),
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//       lineHeight: hp('2%'),
+//     }),
+//   },
+//   reviewsContainer: {
+//     paddingHorizontal: wp('5%'),
+//     paddingBottom: hp('12.5%'),
+//     ...(isWeb && {
+//       paddingHorizontal: wp('2%'),
+//       paddingBottom: hp('4%'),
+//     }),
+//   },
+//   reviewItem: {
+//     marginBottom: hp('4.5%'),
+//     borderRadius: wp('2%'),
+//     ...(isWeb && {
+//       marginBottom: hp('1.5%'),
+//       padding: wp('2%'),
+//     }),
+//   },
+//   reviewHeader: {
+//     flexDirection: 'row',
+//     alignItems: 'center',
+//     marginBottom: hp('1.25%'),
+//     ...(isWeb && {
+//       marginBottom: hp('0.75%'),
+//     }),
+//   },
+//   reviewInfo: {
+//     flex: 1,
+//   },
+//   reviewName: {
+//     fontSize: fontsizes.size15,
+//     fontFamily: fonts.semiBold600,
+//     color: '#000000',
+//     marginBottom: hp('0.25%'),
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//     }),
+//   },
+//   reviewRating: {
+//     flexDirection: 'row',
+//     alignItems: 'center',
+//   },
+//   ratingText: {
+//     fontSize: fontsizes.size16,
+//     fontFamily: fonts.bold700,
+//     color: '#000000',
+//     marginRight: wp('2%'),
+//     ...(isWeb && {
+//       fontSize: wp('2.5%'),
+//       marginRight: wp('1.5%'),
+//     }),
+//   },
+//   reviewDate: {
+//     fontSize: fontsizes.size12,
+//     fontFamily: fonts.light300,
+//     color: '#666',
+//     ...(isWeb && {
+//       fontSize: wp('2.5%'),
+//     }),
+//   },
+//   reviewText: {
+//     fontSize: fontsizes.size14,
+//     fontFamily: fonts.light300,
+//     color: '#000000',
+//     lineHeight: hp('2.25%'),
+//     marginLeft: wp('7%'),
+//     ...(isWeb && {
+//       fontSize: wp('2.8%'),
+//       lineHeight: hp('1.8%'),
+//     }),
+//   },
+//   navIcon: {
+//     height: wp('6%'),
+//     width: wp('6%'),
+//     marginBottom: hp('4.2%'),
+//     marginRight: wp('1%'),
+//     color: '#666',
+//     top: 0,
+//   },
+// qaSection: {
+//   marginTop: 20,
+//   paddingHorizontal: 16,
+// },
+
+// qaTitle: {
+//   fontSize: 16,
+//   fontFamily: fonts.semiBold600,
+//   color: "#000",
+//   marginBottom: 10,
+// },
+
+// viewAllBtn: {
+//   flexDirection: "row",
+//   justifyContent: "space-between",
+//   alignItems: "center",
+//   paddingVertical: 12,
+//   paddingHorizontal: 12,
+//   borderWidth: 1,
+//   borderColor: "#E5E7EB", // borda leve, discreta
+//   borderRadius: 8,
+//   backgroundColor: "#fff",
+// },
+
+// viewAllText: {
+//   fontSize: 15,
+//   fontFamily: fonts.medium500,
+//   color: Colors.primaryRed, // cor principal do seu app
+// },
+
+// arrow: {
+//   fontSize: 18,
+//   color: "#999",
+// },
+
+
+// });

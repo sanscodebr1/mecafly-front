@@ -55,6 +55,9 @@ import { OrderDetailScreen } from "../screens/app/OrderDetails";
 import { DocumentsScreen } from "../screens/app/Documents";
 import { LoginScreen } from "../screens/app/Login";
 import ProfessionalDocuments from "../screens/app/Professional/ProfessionalDocuments";
+import  ProductQuestionsList  from "../screens/app/ProductQuestions";
+import { SellerQuestionsListScreen } from "../screens/app/SellerQuestionsListScreen";
+
 
 
 // Enable native screens for better performance
@@ -179,8 +182,11 @@ return(
             <Stack.Screen name="OrderDetails" component={OrderDetailScreen}/>
             <Stack.Screen name="Documents" component={DocumentsScreen}/>
             <Stack.Screen name="Login" component={LoginScreen}/>
+            <Stack.Screen name="ProductQuestions" component={ProductQuestionsList}/>
             <Stack.Screen name="ProfessionalDocuments" component={ProfessionalDocuments}/>
-            <Stack.Screen name= "EditAddress" component={EditAddressScreen}/>
+            <Stack.Screen name= "EditAddress" component={EditAddressScreen}/> 
+            <Stack.Screen name="SellerQuestionsListScreen" component={SellerQuestionsListScreen}/>
+
 
         </Stack.Navigator>
 

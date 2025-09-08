@@ -57,7 +57,7 @@ export function SellerAreaScreen() {
     if (screen === 'MyProducts') navigation.navigate('MyProducts' as never);
     if (screen === 'MySales') navigation.navigate('MySales' as never);
     if (screen === 'MyProfile') navigation.navigate('Profile' as never);
-    if (screen === 'Questions') navigation.navigate('Questions' as never);
+    if (screen === 'Questions') navigation.navigate('SellerQuestionsListScreen' as never);
   };
 
   const sellerButtons = [
