@@ -1,5 +1,3 @@
-// 1. Atualizar ProductCreationContext.tsx para armazenar o brand.id
-
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 export interface ProductCreationData {
@@ -8,25 +6,39 @@ export interface ProductCreationData {
     titulo: string;
     descricao: string;
     marca: string;
-    marcaId: number; // Adicionar campo para armazenar o ID da marca
+    marcaId: number;
     stock: number;
   };
   uploadedImages?: { id: string; uri: string }[];
   price?: string;
+  shippingConfig?: {
+    height: string;
+    width: string;
+    length: string;
+    weight: string;
+    declaredValue: string;
+  };
 }
 
 interface ProductCreationContextType {
   productData: ProductCreationData;
   setSelectedCategory: (category: { id: number; name: string }) => void;
-  setProductDetails: (details: { 
-    titulo: string; 
-    descricao: string; 
+  setProductDetails: (details: {
+    titulo: string;
+    descricao: string;
     marca: string;
-    marcaId: number; // Incluir marcaId
+    marcaId: number;
     stock: number;
   }) => void;
   setUploadedImages: (images: { id: string; uri: string }[]) => void;
   setPrice: (price: string) => void;
+  setShippingConfig: (config: {
+    height: string;
+    width: string;
+    length: string;
+    weight: string;
+    declaredValue: string;
+  }) => void;
   clearProductData: () => void;
 }
 
@@ -39,9 +51,9 @@ export const ProductCreationProvider: React.FC<{ children: ReactNode }> = ({ chi
     setProductData(prev => ({ ...prev, selectedCategory: category }));
   };
 
-  const setProductDetails = (details: { 
-    titulo: string; 
-    descricao: string; 
+  const setProductDetails = (details: {
+    titulo: string;
+    descricao: string;
     marca: string;
     marcaId: number;
     stock: number;
@@ -57,6 +69,16 @@ export const ProductCreationProvider: React.FC<{ children: ReactNode }> = ({ chi
     setProductData(prev => ({ ...prev, price }));
   };
 
+  const setShippingConfig = (config: {
+    height: string;
+    width: string;
+    length: string;
+    weight: string;
+    declaredValue: string;
+  }) => {
+    setProductData(prev => ({ ...prev, shippingConfig: config }));
+  };
+
   const clearProductData = () => {
     setProductData({});
   };
@@ -69,6 +91,7 @@ export const ProductCreationProvider: React.FC<{ children: ReactNode }> = ({ chi
         setProductDetails,
         setUploadedImages,
         setPrice,
+        setShippingConfig,
         clearProductData,
       }}
     >
@@ -77,9 +100,9 @@ export const ProductCreationProvider: React.FC<{ children: ReactNode }> = ({ chi
   );
 };
 
-export const useProductCreation = () => {
+export const useProductCreation = (): ProductCreationContextType => {
   const context = useContext(ProductCreationContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useProductCreation must be used within a ProductCreationProvider');
   }
   return context;

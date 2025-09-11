@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Image as RNImage } from 'react-native';
 import {
   View,
@@ -8,6 +8,8 @@ import {
   TextInput,
   Image,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -17,13 +19,60 @@ import { BottomTabBar } from '../../../../components/BottomTabBar';
 import { useScrollAwareHeader } from '../../../../hooks/useScrollAwareHeader';
 import { wp, hp, isWeb, getWebStyles } from '../../../../utils/responsive';
 import { Colors } from '../../../../constants/colors';
+import { getAllProfessionals, searchProfessionals, getAttributeValue, Professional } from '../../../../services/professionalServices';
 
 export function ProfissionaisScreen() {
-  console.log('👨‍💼 ProfissionaisScreen component rendering...');
+  console.log('👨‍💼 ProfissionaisScreens component rendering...');
   
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('profissionais');
   const [activeBottomTab, setActiveBottomTab] = useState('home');
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadProfessionals();
+  }, []);
+
+  const loadProfessionals = async () => {
+    try {
+      setLoading(true);
+      const data = await getAllProfessionals();
+      setProfessionals(data);
+    } catch (error) {
+      console.error('Erro ao carregar profissionais:', error);
+      Alert.alert('Erro', 'Não foi possível carregar os profissionais. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await loadProfessionals();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleSearch = async (text: string) => {
+    setSearchTerm(text);
+    
+    if (text.trim() === '') {
+      loadProfessionals();
+      return;
+    }
+
+    try {
+      const searchResults = await searchProfessionals(text.trim());
+      setProfessionals(searchResults);
+    } catch (error) {
+      console.error('Erro ao pesquisar profissionais:', error);
+    }
+  };
 
   const handleTabPress = (tab: 'produtos' | 'profissionais') => {
     setActiveTab(tab);
@@ -42,73 +91,70 @@ export function ProfissionaisScreen() {
   };
 
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
-  
 
-  const handleProfilePress = () => {
-    // Navigate to profile detail screen
+  const handleProfilePress = (professionalId: number) => {
     navigation.navigate('ProfessionalDetail' as never);
+    // navigation.navigate('ProfessionalDetail' as never, { professionalId });
   };
-
-  const professionals = [
-    {
-      id: '1',
-      name: 'João da Silva',
-      image: require('../../../../assets/images/profiles/worker1.png'),
-      flightHours: '1500',
-      description: 'Piloto de drone agrícola com 2 anos de experiência atendendo milho. Opero drones com RTK/plan...',
-    },
-    {
-      id: '2',
-      name: 'Maria Santos',
-      image: require('../../../../assets/images/profiles/worker2.png'),
-      flightHours: '2200',
-      description: 'Piloto de drone agrícola com 2 anos de experiência atendendo milho. Opero drones com RTK/plan...',
-    },
-    {
-      id: '3',
-      name: 'Pedro Oliveira',
-      image: require('../../../../assets/images/profiles/worker3.png'),
-      flightHours: '1800',
-      description: 'Piloto de drone agrícola com 2 anos de experiência atendendo milho. Opero drones com RTK/plan...',
-    },
-    {
-      id: '4',
-      name: 'Ana Costa',
-      image: require('../../../../assets/images/profiles/worker4.png'),
-      flightHours: '3000',
-      description: 'Piloto de drone agrícola com 2 anos de experiência atendendo milho. Opero drones com RTK/plan...',
-    },
-  ];
 
   const bannerSrc = require('../../../../assets/images/homeImage.png');
 
+  const renderProfessionalCard = ({ item }: { item: Professional }) => {
+    // Buscar valores específicos dos atributos
+    const flightHours = getAttributeValue(item, 'flight_hours') || '0';
+    const experience = getAttributeValue(item, 'experience_years') || '';
+    const specialties = getAttributeValue(item, 'specialties') || '';
+    
+    // Criar descrição baseada nos atributos ou usar a descrição do perfil
+    let description = item.description || '';
+    if (!description && (experience || specialties)) {
+      description = `Profissional com ${experience ? `${experience} anos de experiência` : 'experiência'} ${specialties ? `em ${specialties}` : ''}.`;
+    }
+    if (description.length > 100) {
+      description = description.substring(0, 100) + '...';
+    }
 
-  const renderProfessionalCard = ({ item }: { item: any }) => (
-    <View style={styles.professionalCard}>
-      <View style={styles.cardHeader}>
-        <View style={styles.avatarPlaceholder}>
-          <Image
-            source={item.image}
-            style={{ width: '100%', height: '100%', borderRadius: wp('2%') }}>
-              
-            </Image>
+    return (
+      <View style={styles.professionalCard}>
+        <View style={styles.cardHeader}>
+          <View style={styles.avatarPlaceholder}>
+            {item.user_picture ? (
+              <Image
+                source={{ uri: item.user_picture }}
+                style={{ width: '100%', height: '100%', borderRadius: wp('2%') }}
+                defaultSource={require('../../../../assets/images/profiles/worker1.png')}
+              />
+            ) : (
+              <Image
+                source={require('../../../../assets/images/profiles/worker1.png')}
+                style={{ width: '100%', height: '100%', borderRadius: wp('2%') }}
+              />
+            )}
+          </View>
+          <Text style={styles.professionalName}>{item.name}</Text>
         </View>
-        <Text style={styles.professionalName}>{item.name}</Text>
-      </View>
-      
-      <View style={styles.cardContent}>
-        <Text style={styles.flightHoursLabel}>Horas de voo:</Text>
-        <Text style={styles.flightHoursValue}>{item.flightHours}</Text>
         
-        <Text style={styles.descriptionLabel}>Descrição:</Text>
-        <Text style={styles.descriptionText}>{item.description}</Text>
+        <View style={styles.cardContent}>
+          <Text style={styles.flightHoursLabel}>Horas de voo:</Text>
+          <Text style={styles.flightHoursValue}>{flightHours}</Text>
+          
+          {description && (
+            <>
+              <Text style={styles.descriptionLabel}>Descrição:</Text>
+              <Text style={styles.descriptionText}>{description}</Text>
+            </>
+          )}
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.viewProfileButton} 
+          onPress={() => handleProfilePress(item.professional_id)}
+        >
+          <Text style={styles.viewProfileButtonText}>Ver Perfil</Text>
+        </TouchableOpacity>
       </View>
-      
-      <TouchableOpacity style={styles.viewProfileButton} onPress={handleProfilePress}>
-        <Text style={styles.viewProfileButtonText}>Ver Perfil</Text>
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   const renderHeader = () => (
     <View>
@@ -116,8 +162,10 @@ export function ProfissionaisScreen() {
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Pesquisar"
-          placeholderTextColor="#000000"
+          placeholder="Pesquisar profissionais"
+          placeholderTextColor="#666666"
+          value={searchTerm}
+          onChangeText={handleSearch}
         />
         <TouchableOpacity style={styles.searchIcon}>
           <Image
@@ -128,19 +176,20 @@ export function ProfissionaisScreen() {
       </View>
 
       {/* Banner Placeholder */}
-      
-              <View style={styles.bannerPlaceholder}>
-                <Image
-  source={bannerSrc}
-  style={styles.banner}
-  resizeMode="contain"
-/>
-              </View>
+      <View style={styles.bannerPlaceholder}>
+        <Image
+          source={bannerSrc}
+          style={styles.banner}
+          resizeMode="contain"
+        />
+      </View>
 
       {/* Professionals Section Header */}
       <View style={styles.professionalsSection}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Profissionais</Text>
+          <Text style={styles.sectionTitle}>
+            Profissionais {professionals.length > 0 && `(${professionals.length})`}
+          </Text>
           <TouchableOpacity style={styles.filterButton}>
             <Text style={styles.filterButtonText}>Filtro</Text>
           </TouchableOpacity>
@@ -148,6 +197,43 @@ export function ProfissionaisScreen() {
       </View>
     </View>
   );
+
+  const renderEmptyComponent = () => (
+    <View style={styles.emptyContainer}>
+      <Text style={styles.emptyText}>
+        {searchTerm ? 'Nenhum profissional encontrado para sua pesquisa.' : 'Nenhum profissional cadastrado.'}
+      </Text>
+      {!searchTerm && (
+        <TouchableOpacity style={styles.refreshButton} onPress={loadProfessionals}>
+          <Text style={styles.refreshButtonText}>Tentar novamente</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const renderLoadingComponent = () => (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={Colors.primaryRed} />
+      <Text style={styles.loadingText}>Carregando profissionais...</Text>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, getWebStyles()]}>
+        <Header
+          activeTab={activeTab}
+          onTabPress={handleTabPress}
+          scrollY={scrollY}
+        />
+        {renderLoadingComponent()}
+        <BottomTabBar 
+          activeTab={activeBottomTab}
+          onTabPress={handleBottomTabPress}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
@@ -185,15 +271,18 @@ export function ProfissionaisScreen() {
       <FlatList
         data={professionals}
         renderItem={renderProfessionalCard}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.professional_id.toString()}
         numColumns={isWeb ? 4 : 2}
-        columnWrapperStyle={styles.professionalsRow}
+        columnWrapperStyle={professionals.length > 1 ? styles.professionalsRow : null}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.professionalsContainer}
         style={styles.professionalsFlatList}
         ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmptyComponent}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
       />
 
       {/* Bottom Navigation - Only show on mobile */}
@@ -279,7 +368,7 @@ const styles = StyleSheet.create({
     borderRadius: wp('3.8%'),
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('1%'),
-    opacity: 0.5,
+    opacity: 0.8,
   },
   searchInput: {
     flex: 1,
@@ -296,26 +385,22 @@ const styles = StyleSheet.create({
   },
   bannerPlaceholder: {
     alignSelf: 'center',
-  marginBottom: hp('2.5%'),
+    marginBottom: hp('2.5%'),
     marginHorizontal: wp('5%'),
-  overflow: 'hidden',        // keeps rounded corners on the *container*
-  // backgroundColor: '#D6DBDE',// color behind letterboxing
-  ...(isWeb && {
-    marginHorizontal: wp('2%'),
-    marginBottom: hp('1.5%'),
-    marginTop: hp('8%'),
-  }),
+    overflow: 'hidden',
+    ...(isWeb && {
+      marginHorizontal: wp('2%'),
+      marginBottom: hp('1.5%'),
+      marginTop: hp('8%'),
+    }),
   },
-
-  banner:{
+  banner: {
     width: '100%',
     height: undefined,
     aspectRatio: 16/9,
     maxHeight: hp('28%'),
     marginRight: wp('%'),
-
   },
-
   professionalsSection: {
     marginHorizontal: wp('5%'),
     marginBottom: hp('2.5%'),
@@ -494,4 +579,41 @@ const styles = StyleSheet.create({
       fontSize: wp('2.5%'),
     }),
   },
-}); 
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: hp('10%'),
+  },
+  loadingText: {
+    marginTop: hp('2%'),
+    fontSize: wp('4%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: hp('10%'),
+    paddingHorizontal: wp('10%'),
+  },
+  emptyText: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: hp('2%'),
+  },
+  refreshButton: {
+    backgroundColor: Colors.primaryRed,
+    paddingHorizontal: wp('6%'),
+    paddingVertical: hp('1.5%'),
+    borderRadius: wp('4%'),
+  },
+  refreshButtonText: {
+    color: '#fff',
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.medium500,
+  },
+});

@@ -1,4 +1,3 @@
-// services/cartServices.ts
 import { supabase } from '../lib/supabaseClient';
 
 export interface CartItem {
@@ -12,7 +11,8 @@ export interface CartItem {
   stock: number;
   isAvailable: boolean;
   productId: string;
-  storeId: string;
+  storeId: string | null;
+  storeUserId: string | null;
   storeName: string;
 }
 
@@ -53,23 +53,36 @@ export async function getUserCart(): Promise<CartSummary> {
       return { items: [], totalItems: 0, totalValue: 0, totalValueFormatted: 'R$ 0,00' };
     }
 
-    // Mapear os dados para a interface CartItem
-    const items: CartItem[] = data.map(item => ({
-      id: item.cart_id.toString(),
-      name: item.product_name,
-      brand: item.brand_name || 'Sem marca',
-      price: formatPrice(item.price),
-      quantity: item.quantity,
-      subtotal: formatPrice(item.subtotal),
-      image: item.main_image_url || 'https://via.placeholder.com/300x300?text=Sem+Imagem',
-      stock: item.stock,
-      isAvailable: item.is_available,
-      productId: item.product_id.toString(),
-      storeId: item.store_id?.toString() || '',
-      storeName: item.store_name || item.company_name || 'Loja'
-    }));
+    console.log('Raw cart data from DB:', data); // Debug log
 
-    // Calcular totais
+    const items: CartItem[] = data.map(item => {
+      const storeId = item.store_id ? item.store_id.toString() : null;
+      const storeUserId = item.store_user_id || null;
+      
+      console.log(`Item ${item.product_name}:`, {
+        store_id_raw: item.store_id,
+        store_id_processed: storeId,
+        store_user_id: storeUserId,
+        store_name: item.store_name || item.company_name
+      });
+
+      return {
+        id: item.cart_id.toString(),
+        name: item.product_name,
+        brand: item.brand_name || 'Sem marca',
+        price: formatPrice(item.price),
+        quantity: item.quantity,
+        subtotal: formatPrice(item.subtotal),
+        image: item.main_image_url || 'https://via.placeholder.com/300x300?text=Sem+Imagem',
+        stock: item.stock,
+        isAvailable: item.is_available,
+        productId: item.product_id.toString(),
+        storeId: storeId,
+        storeUserId: storeUserId,
+        storeName: item.store_name || item.company_name || 'Loja'
+      };
+    });
+
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
     const totalValue = data.reduce((sum, item) => sum + item.subtotal, 0);
 
@@ -85,7 +98,6 @@ export async function getUserCart(): Promise<CartSummary> {
   }
 }
 
-// Adicionar item ao carrinho
 export async function addToCart(productId: string, quantity: number = 1): Promise<boolean> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -95,7 +107,6 @@ export async function addToCart(productId: string, quantity: number = 1): Promis
       return false;
     }
 
-    // Verificar se o produto já está no carrinho
     const { data: existingItem } = await supabase
       .from('cart')
       .select('id, quantity')
@@ -104,7 +115,6 @@ export async function addToCart(productId: string, quantity: number = 1): Promis
       .single();
 
     if (existingItem) {
-      // Se já existe, atualizar a quantidade
       const { error } = await supabase
         .from('cart')
         .update({ quantity: existingItem.quantity + quantity })
@@ -115,7 +125,6 @@ export async function addToCart(productId: string, quantity: number = 1): Promis
         return false;
       }
     } else {
-      // Se não existe, criar novo item
       const { error } = await supabase
         .from('cart')
         .insert({
@@ -137,7 +146,6 @@ export async function addToCart(productId: string, quantity: number = 1): Promis
   }
 }
 
-// Atualizar quantidade de um item no carrinho
 export async function updateCartItemQuantity(cartItemId: string, quantity: number): Promise<boolean> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -148,7 +156,6 @@ export async function updateCartItemQuantity(cartItemId: string, quantity: numbe
     }
 
     if (quantity <= 0) {
-      // Se quantidade for 0 ou menor, remover o item
       return await removeFromCart(cartItemId);
     }
 
@@ -156,7 +163,7 @@ export async function updateCartItemQuantity(cartItemId: string, quantity: numbe
       .from('cart')
       .update({ quantity })
       .eq('id', parseInt(cartItemId))
-      .eq('user_id', user.id); // Garantir que só pode editar próprios itens
+      .eq('user_id', user.id); 
 
     if (error) {
       console.error('Erro ao atualizar quantidade:', error);
@@ -170,7 +177,6 @@ export async function updateCartItemQuantity(cartItemId: string, quantity: numbe
   }
 }
 
-// Remover item do carrinho
 export async function removeFromCart(cartItemId: string): Promise<boolean> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -198,7 +204,6 @@ export async function removeFromCart(cartItemId: string): Promise<boolean> {
   }
 }
 
-// Limpar todo o carrinho do usuário
 export async function clearCart(): Promise<boolean> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -225,7 +230,6 @@ export async function clearCart(): Promise<boolean> {
   }
 }
 
-// Verificar se um produto está no carrinho
 export async function isProductInCart(productId: string): Promise<{ inCart: boolean; quantity: number }> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -252,7 +256,6 @@ export async function isProductInCart(productId: string): Promise<{ inCart: bool
   }
 }
 
-// Contar total de itens no carrinho (para badge)
 export async function getCartItemCount(): Promise<number> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -305,7 +308,6 @@ export async function validateCart(): Promise<{ valid: boolean; issues: string[]
   }
 }
 
-// Função para sincronizar carrinho (útil para quando o app reabre)
 export async function syncCart(): Promise<CartSummary> {
   return await getUserCart();
 }

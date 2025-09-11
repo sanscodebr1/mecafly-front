@@ -230,7 +230,7 @@ export function CartScreen() {
       return;
     }
 
-    navigation.navigate('Checkout' as never);
+    navigation.navigate('DeliveryAddress' as never);
   };
 
   const handleContinueShopping = () => {

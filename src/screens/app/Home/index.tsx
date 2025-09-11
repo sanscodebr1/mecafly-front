@@ -41,9 +41,11 @@ export function HomeScreen() {
   // Estados para produtos
   const [products, setProducts] = useState<Product[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
 
@@ -61,25 +63,34 @@ export function HomeScreen() {
 
   // Carrega produtos quando o filtro muda
   useEffect(() => {
-    if (activeFilter !== 'todos') {
-      loadProductsByCategory();
-    } else {
-      loadAllProducts();
-    }
-  }, [activeFilter]);
-
-  // Busca produtos quando há query de pesquisa
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      handleSearch();
-    } else {
-      // Se não há busca, volta para os produtos normais
+    if (!isSearching) {
       if (activeFilter !== 'todos') {
         loadProductsByCategory();
       } else {
         loadAllProducts();
       }
     }
+  }, [activeFilter, isSearching]);
+
+  // Busca produtos quando há query de pesquisa
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery.trim()) {
+        setIsSearching(true);
+        handleSearch();
+      } else {
+        setIsSearching(false);
+        setSearchResults([]);
+        // Quando limpa a pesquisa, volta para os produtos normais
+        if (activeFilter !== 'todos') {
+          loadProductsByCategory();
+        } else {
+          loadAllProducts();
+        }
+      }
+    }, 300); // Debounce de 300ms
+
+    return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
   const loadInitialData = async () => {
@@ -135,15 +146,22 @@ export function HomeScreen() {
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+    if (!searchQuery.trim()) {
+      setIsSearching(false);
+      setSearchResults([]);
+      return;
+    }
 
     setLoading(true);
+    setError(null);
+    
     try {
       const searchResults = await searchApprovedProducts(searchQuery.trim());
-      setProducts(searchResults);
+      setSearchResults(searchResults);
     } catch (err) {
       console.error('Erro na busca:', err);
       setError('Erro na busca de produtos');
+      setSearchResults([]);
     } finally {
       setLoading(false);
     }
@@ -180,6 +198,17 @@ export function HomeScreen() {
   const handleFilterPress = (filter: 'todos' | 'drones' | 'control') => {
     setActiveFilter(filter);
     setSearchQuery(''); // Limpa a busca ao trocar filtro
+    setIsSearching(false);
+  };
+
+  const handleSearchInputChange = (text: string) => {
+    setSearchQuery(text);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setIsSearching(false);
+    setSearchResults([]);
   };
 
   const categories = [
@@ -208,12 +237,15 @@ export function HomeScreen() {
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <Text style={styles.emptyStateText}>
-        {searchQuery ? 'Nenhum produto encontrado para sua busca' : 'Nenhum produto disponível'}
+        {isSearching 
+          ? `Nenhum produto encontrado para "${searchQuery}"` 
+          : 'Nenhum produto disponível'
+        }
       </Text>
-      {searchQuery && (
+      {isSearching && (
         <TouchableOpacity 
           style={styles.clearSearchButton}
-          onPress={() => setSearchQuery('')}
+          onPress={clearSearch}
         >
           <Text style={styles.clearSearchText}>Limpar busca</Text>
         </TouchableOpacity>
@@ -226,12 +258,15 @@ export function HomeScreen() {
       <Text style={styles.errorText}>{error}</Text>
       <TouchableOpacity 
         style={styles.retryButton}
-        onPress={loadInitialData}
+        onPress={() => isSearching ? handleSearch() : loadInitialData()}
       >
         <Text style={styles.retryText}>Tentar novamente</Text>
       </TouchableOpacity>
     </View>
   );
+
+  // Determina quais produtos mostrar
+  const displayProducts = isSearching ? searchResults : products;
 
   const bannerSrc = require('../../../assets/images/homeImage.png');
 
@@ -258,7 +293,8 @@ export function HomeScreen() {
           />
         }
       >
-        {!isWeb && (
+        {/* Tabs - Oculto quando está pesquisando */}
+        {!isWeb && !isSearching && (
           <View style={styles.tabContainer}>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'produtos' && styles.activeTab]}
@@ -280,94 +316,119 @@ export function HomeScreen() {
           </View>
         )}
 
-        {/* Mobile: Search Bar */}
+        {/* Mobile: Search Bar - Sempre visível */}
         {!isWeb && (
-          <View style={styles.searchContainer}>
+          <View style={[
+            styles.searchContainer,
+            isSearching && styles.searchContainerActive
+          ]}>
             <TextInput
               style={styles.searchInput}
               placeholder="Pesquisar produtos..."
               placeholderTextColor="#666"
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={handleSearchInputChange}
               returnKeyType="search"
               onSubmitEditing={handleSearch}
             />
-            <TouchableOpacity style={styles.searchIcon} onPress={handleSearch}>
-              <Image
-                source={require('../../../assets/icons/search.png')}
-                style={styles.searchIconText}
-              />
-            </TouchableOpacity>
+            {searchQuery ? (
+              <TouchableOpacity style={styles.searchIcon} onPress={clearSearch}>
+                <Image
+                  style={styles.searchIconText}
+                />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.searchIcon} onPress={handleSearch}>
+                <Image
+                  source={require('../../../assets/icons/search.png')}
+                  style={styles.searchIconText}
+                />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
-        {/* Banner */}
-        <View style={styles.bannerPlaceholder}>
-          <Image
-            source={bannerSrc}
-            style={styles.banner}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* Categories Section */}
-        <View style={styles.categoriesSection}>
-          <Text style={styles.sectionTitle}>Navegue por categorias</Text>
-          <FlatList
-            data={categories}
-            renderItem={renderCategoryItem}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesContainer}
-          />
-        </View>
-
-        {/* Featured Products Section */}
-        {isWeb && (
-          <Text style={styles.sectionTitle}>Destaques</Text>
+        {/* Banner - Oculto quando está pesquisando */}
+        {!isSearching && (
+          <View style={styles.bannerPlaceholder}>
+            <Image
+              source={bannerSrc}
+              style={styles.banner}
+              resizeMode="contain"
+            />
+          </View>
         )}
 
+        {/* Categories Section - Oculto quando está pesquisando */}
+        {!isSearching && (
+          <View style={styles.categoriesSection}>
+            <Text style={styles.sectionTitle}>Navegue por categorias</Text>
+            <FlatList
+              data={categories}
+              renderItem={renderCategoryItem}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesContainer}
+            />
+          </View>
+        )}
+
+        {/* Products Section */}
         <View style={styles.featuredSection}>
-          {!isWeb && (
-            <View style={styles.featuredHeader}>
-              <Text style={styles.sectionTitle}>Destaques</Text>
-              <View style={styles.filterContainer}>
-                <TouchableOpacity
-                  style={[styles.filterButton, activeFilter === 'todos' && styles.activeFilter]}
-                  onPress={() => handleFilterPress('todos')}
-                >
-                  <Text style={[styles.filterText, activeFilter === 'todos' && styles.activeFilterText]}>
-                    Todos
-                  </Text>
-                </TouchableOpacity>
+          {/* Título da seção */}
+          {isSearching ? (
+            <Text style={styles.searchTitle}>
+              Resultados para "{searchQuery}"
+            </Text>
+          ) : (
+            <>
+              {isWeb && (
+                <Text style={styles.sectionTitle}>Destaques</Text>
+              )}
+              {!isWeb && (
+                <View style={styles.featuredHeader}>
+                  <Text style={styles.sectionTitle}>Destaques</Text>
+                  <View style={styles.filterContainer}>
+                    <TouchableOpacity
+                      style={[styles.filterButton, activeFilter === 'todos' && styles.activeFilter]}
+                      onPress={() => handleFilterPress('todos')}
+                    >
+                      <Text style={[styles.filterText, activeFilter === 'todos' && styles.activeFilterText]}>
+                        Todos
+                      </Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.filterButton, activeFilter === 'drones' && styles.activeFilter]}
-                  onPress={() => handleFilterPress('drones')}
-                >
-                  <Text style={[styles.filterText, activeFilter === 'drones' && styles.activeFilterText]}>
-                    Drones
-                  </Text>
-                </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.filterButton, activeFilter === 'drones' && styles.activeFilter]}
+                      onPress={() => handleFilterPress('drones')}
+                    >
+                      <Text style={[styles.filterText, activeFilter === 'drones' && styles.activeFilterText]}>
+                        Drones
+                      </Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.filterButton, activeFilter === 'control' && styles.activeFilter]}
-                  onPress={() => handleFilterPress('control')}
-                >
-                  <Text style={[styles.filterText, activeFilter === 'control' && styles.activeFilterText]}>
-                    Control
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+                    <TouchableOpacity
+                      style={[styles.filterButton, activeFilter === 'control' && styles.activeFilter]}
+                      onPress={() => handleFilterPress('control')}
+                    >
+                      <Text style={[styles.filterText, activeFilter === 'control' && styles.activeFilterText]}>
+                        Control
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </>
           )}
 
           {/* Loading State */}
           {loading && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={Colors.primaryRed} />
-              <Text style={styles.loadingText}>Carregando produtos...</Text>
+              <Text style={styles.loadingText}>
+                {isSearching ? 'Buscando produtos...' : 'Carregando produtos...'}
+              </Text>
             </View>
           )}
 
@@ -377,9 +438,9 @@ export function HomeScreen() {
           {/* Products Grid */}
           {!loading && !error && (
             <>
-              {products.length > 0 ? (
+              {displayProducts.length > 0 ? (
                 <FlatList
-                  data={products}
+                  data={displayProducts}
                   renderItem={({ item: product }) => (
                     <ProductCard
                       product={product}
@@ -401,11 +462,13 @@ export function HomeScreen() {
         </View>
       </Animated.ScrollView>
 
-      {/* Bottom Navigation - Only show on mobile */}
-      {/* <BottomTabBar
-        activeTab={activeBottomTab}
-        onTabPress={handleBottomTabPress}
-      /> */}
+      {/* Bottom Navigation - Only show on mobile and when not searching */}
+      {/* {!isSearching && (
+        <BottomTabBar
+          activeTab={activeBottomTab}
+          onTabPress={handleBottomTabPress}
+        />
+      )} */}
     </SafeAreaView>
   );
 }
@@ -460,6 +523,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
+  searchContainerActive: {
+    borderColor: Colors.primaryRed,
+    backgroundColor: '#FFF',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
   searchInput: {
     flex: 1,
     fontSize: wp('3.4%'),
@@ -473,6 +545,14 @@ const styles = StyleSheet.create({
   searchIconText: {
     width: wp('6%'),
     height: wp('6%'),
+  },
+  searchTitle: {
+    fontSize: wp('4%'),
+    marginLeft: wp('5%'),
+    fontFamily: fonts.semiBold600,
+    color: '#000000',
+    marginBottom: hp('2%'),
+    marginTop: hp('1%'),
   },
   bannerPlaceholder: {
     marginBottom: hp('2.5%'),

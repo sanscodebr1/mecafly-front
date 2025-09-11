@@ -56,9 +56,9 @@ export function AddProductSummaryScreen() {
     });
   };
 
-  const handleContinue = async () => {
+const handleContinue = async () => {
     if (!productData.selectedCategory || !productData.productDetails || 
-        !productData.uploadedImages?.length || !productData.price) {
+        !productData.uploadedImages?.length || !productData.price || !productData.shippingConfig) {
       Alert.alert('Erro', 'Dados do produto incompletos.');
       return;
     }
@@ -69,6 +69,14 @@ export function AddProductSummaryScreen() {
       const priceValue = getPriceAsNumber();
       const imageUris = productData.uploadedImages.map(img => img.uri);
 
+      const shippingConfig = {
+        height: parseFloat(productData.shippingConfig.height.replace(',', '.')),
+        width: parseFloat(productData.shippingConfig.width.replace(',', '.')),
+        length: parseFloat(productData.shippingConfig.length.replace(',', '.')),
+        weight: parseFloat(productData.shippingConfig.weight.replace(',', '.')),
+        declaredValue: parseFloat(productData.shippingConfig.declaredValue.replace(',', '.')),
+      };
+
       const productId = await createCompleteProduct(
         productData.productDetails.titulo,
         productData.productDetails.descricao,
@@ -76,7 +84,8 @@ export function AddProductSummaryScreen() {
         productData.selectedCategory.id,
         priceValue,
         imageUris,
-        productData.productDetails.stock
+        productData.productDetails.stock,
+        shippingConfig
       );
 
       clearProductData();

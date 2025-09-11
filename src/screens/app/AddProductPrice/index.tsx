@@ -38,7 +38,7 @@ export function AddProductPriceScreen() {
       if (numericValue > 0) {
         // Salva exatamente como o usuário digitou
         setPrice(price);
-        navigation.navigate('AddProductSummary' as never);
+        navigation.navigate('AddProductShipping' as never);
       } else {
         // Handle invalid price
         return;

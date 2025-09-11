@@ -8,10 +8,15 @@ export interface ProductData {
   description: string;
   price: number;
   category: number;
-  brand?: string;
+  brand?: number;
   images: string[];
-  stock:  number;
+  stock: number;
   storeId: number;
+  height?: number;
+  width?: number;
+  length?: number;
+  weight?: number;
+  declaredValue?: number;
 }
 
 export interface ProductCategory {
@@ -26,7 +31,6 @@ export interface ProductBrand {
   created_at: string;
 }
 
-// Novas interfaces para os produtos da view
 export interface ProductImage {
   id: string;
   url: string;
@@ -55,6 +59,12 @@ export interface ProductDetail {
   product_images: ProductImage[];
   total_images: number;
   main_image_url: string;
+  // Novos campos de frete
+  height?: number;
+  width?: number;
+  length?: number;
+  weight?: number;
+  declared_value?: number;
 }
 
 export interface Product {
@@ -437,7 +447,7 @@ export const uploadProductImages = async (
   return uploadedUrls.filter((url): url is string => url !== null);
 };
 
-// Create product
+// Create product - Atualizada para incluir dados de frete
 export const createProduct = async (productData: ProductData): Promise<number> => {
   const { data: product, error } = await supabase
     .from('product')
@@ -450,6 +460,12 @@ export const createProduct = async (productData: ProductData): Promise<number> =
       store_id: productData.storeId,
       status: 'pending',
       stock: productData.stock,
+      // Novos campos de frete
+      height: productData.height,
+      width: productData.width,
+      length: productData.length,
+      weight: productData.weight,
+      declared_value: productData.declaredValue ? Math.round(productData.declaredValue * 100) : null, // Store in cents
     })
     .select('id')
     .single();
@@ -508,7 +524,7 @@ export const getCurrentUserStoreProfile = async () => {
   return storeProfile;
 };
 
-// Complete product creation flow
+// Complete product creation flow - Atualizada para incluir dados de frete
 export const createCompleteProduct = async (
   name: string,
   description: string,
@@ -516,7 +532,14 @@ export const createCompleteProduct = async (
   categoryId: number,
   price: number,
   imageUris: string[],
-  stock: number
+  stock: number,
+  shippingConfig?: {
+    height: number;
+    width: number;
+    length: number;
+    weight: number;
+    declaredValue: number;
+  }
 ): Promise<number> => {
   try {
     // Get user's store profile
@@ -534,7 +557,7 @@ export const createCompleteProduct = async (
     const imageUrls = await uploadProductImages(user.id, imageUris);
 
     // Create product
-    const productData: any = {
+    const productData: ProductData = {
       name,
       description,
       price,
@@ -542,7 +565,15 @@ export const createCompleteProduct = async (
       brand: brand,
       images: imageUrls,
       storeId: storeProfile.id,
-      stock: stock
+      stock: stock,
+      // Adicionar dados de frete se fornecidos
+      ...(shippingConfig && {
+        height: shippingConfig.height,
+        width: shippingConfig.width,
+        length: shippingConfig.length,
+        weight: shippingConfig.weight,
+        declaredValue: shippingConfig.declaredValue,
+      }),
     };
 
     const productId = await createProduct(productData);
@@ -564,7 +595,16 @@ export interface ProductCreationContext {
     titulo: string;
     descricao: string;
     marca: string;
+    marcaId: number;
+    stock: number;
   };
   uploadedImages?: { id: string; uri: string }[];
   price?: string;
+  shippingConfig?: {
+    height: string;
+    width: string;
+    length: string;
+    weight: string;
+    declaredValue: string;
+  };
 }

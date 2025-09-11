@@ -57,6 +57,8 @@ import { LoginScreen } from "../screens/app/Login";
 import ProfessionalDocuments from "../screens/app/Professional/ProfessionalDocuments";
 import  ProductQuestionsList  from "../screens/app/ProductQuestions";
 import { SellerQuestionsListScreen } from "../screens/app/SellerQuestionsListScreen";
+import { AddProductShippingScreen } from "../screens/app/AddProductShipping";
+import { UserAddress } from '../services/userAddress';
 
 
 
@@ -71,7 +73,7 @@ export type RootStackParamList = {
   Checkout: undefined;
   PersonalInfo: undefined;
   DeliveryAddress: undefined;
-  DeliveryMethod: undefined
+  DeliveryMethod: { selectedAddress: UserAddress };
   PaymentMethod: undefined;
   PaymentMethodProfessional: undefined;
   Profissionais: undefined;
@@ -116,6 +118,7 @@ export type RootStackParamList = {
   OrderDetails: undefined;
   Documents: undefined;
   Login: undefined;
+  AddProductShippingScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -186,7 +189,7 @@ return(
             <Stack.Screen name="ProfessionalDocuments" component={ProfessionalDocuments}/>
             <Stack.Screen name= "EditAddress" component={EditAddressScreen}/> 
             <Stack.Screen name="SellerQuestionsListScreen" component={SellerQuestionsListScreen}/>
-
+            <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen} />
 
         </Stack.Navigator>
 

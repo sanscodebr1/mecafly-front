@@ -54,6 +54,12 @@ interface ProductDetail {
   brand_id?: number;
   brand_name?: string;
   status: 'active' | 'pending' | 'rejected' | 'inactive';
+  // Novos campos de frete
+  height?: number;
+  width?: number;
+  length?: number;
+  weight?: number;
+  declared_value?: number;
   product_images?: {
     id: string;
     url: string;
@@ -81,6 +87,13 @@ export function EditProductScreen() {
   const [stock, setStock] = useState('');
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  
+  // Novos estados para frete
+  const [height, setHeight] = useState('');
+  const [width, setWidth] = useState('');
+  const [length, setLength] = useState('');
+  const [weight, setWeight] = useState('');
+  const [declaredValue, setDeclaredValue] = useState('');
   
   const [brands, setBrands] = useState<ProductBrand[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -138,6 +151,13 @@ export function EditProductScreen() {
       setCategoryId(data.category);
       setPrice(formatPriceFromCents(data.price));
       setStock(data.stock?.toString() || '0');
+      
+      // Carregar dados de frete
+      setHeight(data.height ? data.height.toString().replace('.', ',') : '');
+      setWidth(data.width ? data.width.toString().replace('.', ',') : '');
+      setLength(data.length ? data.length.toString().replace('.', ',') : '');
+      setWeight(data.weight ? data.weight.toString().replace('.', ',') : '');
+      setDeclaredValue(data.declared_value ? formatPriceFromCents(data.declared_value) : '');
       
       if (data.product_images && data.product_images.length > 0) {
         const existingImages = data.product_images.map((img: any) => ({
@@ -228,6 +248,42 @@ export function EditProductScreen() {
     let decPart = parts[1] || '';
     decPart = decPart.slice(0, 2);
     return decPart ? `${intPart},${decPart}` : intPart;
+  };
+
+  // Função para formatar campos numéricos de frete
+  const formatNumericField = (text: string) => {
+    const cleanedText = text.replace(/[^\d,.]/g, '');
+    
+    const commaCount = (cleanedText.match(/,/g) || []).length;
+    const dotCount = (cleanedText.match(/\./g) || []).length;
+    
+    if (commaCount + dotCount > 1) {
+      const lastCommaPos = cleanedText.lastIndexOf(',');
+      const lastDotPos = cleanedText.lastIndexOf('.');
+      const lastSeparatorPos = Math.max(lastCommaPos, lastDotPos);
+      
+      const beforeSeparator = cleanedText.substring(0, lastSeparatorPos).replace(/[,.]/g, '');
+      const afterSeparator = cleanedText.substring(lastSeparatorPos);
+      
+      return beforeSeparator + afterSeparator;
+    }
+    
+    return cleanedText;
+  };
+
+  // Função para adicionar decimais automáticos
+  const formatOnBlur = (value: string, setter: (val: string) => void, decimals: number = 2) => {
+    if (!value) return;
+    
+    if (!value.includes(',') && !value.includes('.')) {
+      setter(value + ',' + '0'.repeat(decimals));
+      return;
+    }
+    
+    const lastChar = value.charAt(value.length - 1);
+    if (lastChar === ',' || lastChar === '.') {
+      setter(value + '0'.repeat(decimals));
+    }
   };
 
   const onPriceChange = (t: string) => setPrice(formatPrice(t));
@@ -333,6 +389,13 @@ export function EditProductScreen() {
       return;
     }
 
+    // Validação dos campos de frete (opcionais)
+    const heightValue = height ? parseFloat(height.replace(',', '.')) : null;
+    const widthValue = width ? parseFloat(width.replace(',', '.')) : null;
+    const lengthValue = length ? parseFloat(length.replace(',', '.')) : null;
+    const weightValue = weight ? parseFloat(weight.replace(',', '.')) : null;
+    const declaredValueValue = declaredValue ? parseFloat(declaredValue.replace(',', '.')) : null;
+
     try {
       setSaving(true);
 
@@ -345,6 +408,7 @@ export function EditProductScreen() {
       }
 
       const priceInCents = Math.round(parseFloat(price.replace(',', '.')) * 100);
+      const declaredValueInCents = declaredValueValue ? Math.round(declaredValueValue * 100) : null;
 
       const { error: productError } = await supabase
         .from('product')
@@ -355,7 +419,13 @@ export function EditProductScreen() {
           category: categoryId,
           brand_id: finalBrandId,
           stock: parseInt(stock) || 0,
-          status: 'pending'
+          status: 'pending',
+          // Campos de frete
+          height: heightValue,
+          width: widthValue,
+          length: lengthValue,
+          weight: weightValue,
+          declared_value: declaredValueInCents,
         })
         .eq('id', productId);
 
@@ -635,6 +705,81 @@ export function EditProductScreen() {
             />
           </View>
 
+          {/* SEÇÃO DE CONFIGURAÇÃO DE FRETE */}
+          <Text style={styles.sectionTitle}>Configuração de frete</Text>
+          <Text style={styles.sectionSubtitle}>
+            Configure as dimensões e peso para cálculo do frete (opcional)
+          </Text>
+
+          <Text style={styles.subLabel}>Dimensões (cm)</Text>
+          
+          <Text style={styles.label}>Altura:</Text>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={height}
+              onChangeText={(text) => setHeight(formatNumericField(text))}
+              onBlur={() => formatOnBlur(height, setHeight)}
+              placeholder="0,00"
+              keyboardType="decimal-pad"
+              style={styles.input}
+              placeholderTextColor="#999"
+            />
+          </View>
+
+          <Text style={styles.label}>Largura:</Text>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={width}
+              onChangeText={(text) => setWidth(formatNumericField(text))}
+              onBlur={() => formatOnBlur(width, setWidth)}
+              placeholder="0,00"
+              keyboardType="decimal-pad"
+              style={styles.input}
+              placeholderTextColor="#999"
+            />
+          </View>
+
+          <Text style={styles.label}>Comprimento:</Text>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={length}
+              onChangeText={(text) => setLength(formatNumericField(text))}
+              onBlur={() => formatOnBlur(length, setLength)}
+              placeholder="0,00"
+              keyboardType="decimal-pad"
+              style={styles.input}
+              placeholderTextColor="#999"
+            />
+          </View>
+
+          <Text style={styles.subLabel}>Peso e valor</Text>
+
+          <Text style={styles.label}>Peso (kg):</Text>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={weight}
+              onChangeText={(text) => setWeight(formatNumericField(text))}
+              onBlur={() => formatOnBlur(weight, setWeight, 3)}
+              placeholder="0,000"
+              keyboardType="decimal-pad"
+              style={styles.input}
+              placeholderTextColor="#999"
+            />
+          </View>
+
+          <Text style={styles.label}>Valor declarado (R$):</Text>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={declaredValue}
+              onChangeText={(text) => setDeclaredValue(formatPrice(text))}
+              onBlur={() => formatOnBlur(declaredValue, setDeclaredValue)}
+              placeholder="0,00"
+              keyboardType="decimal-pad"
+              style={styles.input}
+              placeholderTextColor="#999"
+            />
+          </View>
+
           <View style={styles.actions}>
             <TouchableOpacity 
               style={[
@@ -737,6 +882,33 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: hp('2%'),
     ...(isWeb && { fontSize: wp('3%') }),
+  },
+
+  sectionTitle: {
+    fontSize: wp('4.5%'),
+    fontFamily: fonts.bold700,
+    color: '#000',
+    marginTop: hp('3%'),
+    marginBottom: hp('1%'),
+    ...(isWeb && { fontSize: wp('3.5%') }),
+  },
+
+  sectionSubtitle: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginBottom: hp('2%'),
+    lineHeight: wp('4.5%'),
+    ...(isWeb && { fontSize: wp('2.8%'), lineHeight: wp('3.8%') }),
+  },
+
+  subLabel: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.semiBold600,
+    color: '#333',
+    marginTop: hp('1.5%'),
+    marginBottom: hp('1%'),
+    ...(isWeb && { fontSize: wp('3.2%') }),
   },
 
   label: {
