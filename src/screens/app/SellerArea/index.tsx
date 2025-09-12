@@ -17,6 +17,8 @@ import { Colors } from '../../../constants/colors';
 import { useAuth } from '../../../context/AuthContext';
 import { supabase } from '../../../lib/supabaseClient';
 import { PendingMessage } from '../../../components/PendingMessage';
+import { PaymentGatewayBanner } from '../../../components/PaymentGatewayBanner';
+import { PaymentGatewayService, AccountGateway } from '../../../services/paymentGateway';
 
 export function SellerAreaScreen() {
   const navigation = useNavigation();
@@ -25,6 +27,8 @@ export function SellerAreaScreen() {
   const { user } = useAuth();
 
   const [storeStatus, setStoreStatus] = useState<string | null>(null);
+  const [accountGateway, setAccountGateway] = useState<AccountGateway | null>(null);
+  const [showPaymentBanner, setShowPaymentBanner] = useState(true);
 
   useEffect(() => {
     const fetchStore = async () => {
@@ -43,7 +47,44 @@ export function SellerAreaScreen() {
       setStoreStatus(data?.status ?? null);
     };
 
+    const fetchAccountGateway = async () => {
+      if (!user?.id) return;
+      console.log('Buscando conta gateway para usuário:', user.id);
+      const gateway = await PaymentGatewayService.getUserAccountGateway(user.id);
+      console.log('Conta gateway encontrada:', gateway);
+      setAccountGateway(gateway);
+    };
+
     fetchStore();
+    fetchAccountGateway();
+  }, [user?.id]);
+
+  // Realtime para status da store_profile
+  useEffect(() => {
+    let subscription: any;
+    (async () => {
+      if (!user?.id) return;
+      subscription = supabase
+        .channel('store_profile_status')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'store_profile',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload: any) => {
+            const newRow = payload.new || payload.record;
+            if (newRow?.status) setStoreStatus(newRow.status);
+          }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      if (subscription) supabase.removeChannel(subscription);
+    };
   }, [user?.id]);
 
   const handleTabPress = (tab: 'produtos' | 'profissionais') => {
@@ -60,6 +101,15 @@ export function SellerAreaScreen() {
     if (screen === 'Questions') navigation.navigate('SellerQuestionsListScreen' as never);
   };
 
+  const handlePaymentGatewayPress = () => {
+    console.log('Navegando para PaymentGatewayRegistration');
+    navigation.navigate('PaymentGatewayRegistration' as never);
+  };
+
+  const handleClosePaymentBanner = () => {
+    setShowPaymentBanner(false);
+  };
+
   const sellerButtons = [
     { id: '1', title: 'Meus produtos', screen: 'MyProducts' },
     { id: '2', title: 'Minhas vendas', screen: 'MySales' },
@@ -74,6 +124,16 @@ export function SellerAreaScreen() {
         onTabPress={handleTabPress}
         scrollY={scrollY}
       />
+
+      {/* Banner fora do contentContainer para full-bleed */}
+      {showPaymentBanner && storeStatus === 'approved' && (
+        <PaymentGatewayBanner
+          accountGateway={accountGateway}
+          onPressRegister={handlePaymentGatewayPress}
+          onClose={handleClosePaymentBanner}
+          showCloseButton={accountGateway?.status === 'approved'}
+        />
+      )}
 
       <ScrollView 
         style={styles.scrollView}

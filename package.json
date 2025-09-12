@@ -18,6 +18,7 @@
     "@react-navigation/stack": "^7.4.8",
     "@supabase/supabase-js": "^2.56.0",
     "base-64": "^1.0.0",
+    "dotenv": "^17.2.2",
     "expo": "~53.0.20",
     "expo-document-picker": "^13.1.6",
     "expo-file-system": "~18.1.11",
@@ -25,6 +26,7 @@
     "expo-linear-gradient": "~14.1.5",
     "expo-modules-core": "^2.5.0",
     "expo-status-bar": "~2.2.3",
+    "lucide-react-native": "^0.544.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
@@ -40,6 +42,8 @@
     "@babel/core": "^7.25.2",
     "@types/base-64": "^1.0.2",
     "@types/react": "~19.0.10",
+    "react-native-dotenv": "^3.4.11",
+    "supabase": "^2.40.7",
     "typescript": "~5.8.3"
   },
   "private": true
