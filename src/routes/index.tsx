@@ -48,9 +48,22 @@ import { DeliveryMethodScreen } from "../screens/app/DeliveryMethod";
 import { PaymentMethodProfessionalScreen } from "../screens/app/Professional/PaymentMethodProfessional";
 import { MyProductsFilledScreen } from "../screens/app/MyProductsFilled";
 import { EditProductScreen } from "../screens/app/editProduct";
+import { EditAddressScreen } from "../screens/app/EditAddress";
 import { DeactivateProductSuccessScreen } from "../screens/app/ProductDeactivateSuccess";
 import { MyOrdersScreen } from "../screens/app/MyOrders";
 import { OrderDetailScreen } from "../screens/app/OrderDetails";
+import { DocumentsScreen } from "../screens/app/Documents";
+import { LoginScreen } from "../screens/app/Login";
+import ProfessionalDocuments from "../screens/app/Professional/ProfessionalDocuments";
+import  ProductQuestionsList  from "../screens/app/ProductQuestions";
+import { SellerQuestionsListScreen } from "../screens/app/SellerQuestionsListScreen";
+import { AddProductShippingScreen } from "../screens/app/AddProductShipping";
+import { UserAddress } from '../services/userAddress';
+import { MyPurchasesScreen } from "../screens/app/MyPurchases";
+import { PurchaseDetailScreen } from "../screens/app/PurchaseDetails";
+
+
+
 
 // Enable native screens for better performance
 enableScreens();
@@ -63,7 +76,7 @@ export type RootStackParamList = {
   Checkout: undefined;
   PersonalInfo: undefined;
   DeliveryAddress: undefined;
-  DeliveryMethod: undefined
+  DeliveryMethod: { selectedAddress: UserAddress };
   PaymentMethod: undefined;
   PaymentMethodProfessional: undefined;
   Profissionais: undefined;
@@ -102,9 +115,15 @@ export type RootStackParamList = {
   SellerRegisterStore: undefined;
   MyProductsFilled: undefined;
   EditProduct: undefined;
+  EditAddressScreen: undefined;
   DeactivateProductSuccess: undefined;
   MyOrders: undefined;
   OrderDetails: undefined;
+  Documents: undefined;
+  Login: undefined;
+  AddProductShippingScreen: undefined;
+  MyPurchasesScreen: undefined;
+  PurchaseDetailScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -169,6 +188,15 @@ return(
             <Stack.Screen name="DeactivateProductSuccess" component={DeactivateProductSuccessScreen} options={{ title: 'Desativar Produto' }}/>
             <Stack.Screen name="MyOrders" component={MyOrdersScreen}/>
             <Stack.Screen name="OrderDetails" component={OrderDetailScreen}/>
+            <Stack.Screen name="Documents" component={DocumentsScreen}/>
+            <Stack.Screen name="Login" component={LoginScreen}/>
+            <Stack.Screen name="ProductQuestions" component={ProductQuestionsList}/>
+            <Stack.Screen name="ProfessionalDocuments" component={ProfessionalDocuments}/>
+            <Stack.Screen name= "EditAddress" component={EditAddressScreen}/> 
+            <Stack.Screen name="SellerQuestionsListScreen" component={SellerQuestionsListScreen}/>
+            <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen} />
+            <Stack.Screen name="MyPurchases" component={MyPurchasesScreen} />
+            <Stack.Screen name="PurchaseDetails" component={PurchaseDetailScreen} />
 
         </Stack.Navigator>
 

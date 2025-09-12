@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -13,10 +12,19 @@ import { fonts } from '../../../constants/fonts';
 import { SimpleHeader } from '../../../components/SimpleHeader';
 import { InputField } from '../../../components/InputField';
 import { BottomButton } from '../../../components/BottomButton';
+import { useProductCreation } from '../../../context/ProductCreationContext';
 
 export function AddProductPriceScreen() {
   const navigation = useNavigation();
-  const [price, setPrice] = useState('');
+  const { productData, setPrice } = useProductCreation();
+  const [price, setLocalPrice] = useState('');
+
+  useEffect(() => {
+    // Load existing price if available
+    if (productData.price) {
+      setLocalPrice(productData.price);
+    }
+  }, []);
 
   const handleBackPress = () => {
     navigation.goBack();
@@ -24,54 +32,74 @@ export function AddProductPriceScreen() {
 
   const handleContinue = () => {
     if (price.trim()) {
-      // convert to standard number (dot) for processing
-      const numeric = parseFloat(price.replace(/\./g, '').replace(',', '.'));
-      console.log('Product price:', price, 'numeric:', numeric);
-      // Navigate to next screen or finish registration
-      // For now, go back to previous screen
-      navigation.navigate('AddProductSummary' as never);
+      // Converte para número (substitui vírgula por ponto)
+      const numericValue = parseFloat(price.replace(',', '.'));
+      
+      if (numericValue > 0) {
+        // Salva exatamente como o usuário digitou
+        setPrice(price);
+        navigation.navigate('AddProductShipping' as never);
+      } else {
+        // Handle invalid price
+        return;
+      }
     }
-  };
-
-  const formatPrice = (text: string) => {
-    // Allow comma as decimal separator. Normalize dots to commas, remove other chars.
-    let t = text.replace(/\./g, ',');
-    t = t.replace(/[^0-9,]/g, '');
-    // Keep only first comma
-    const parts = t.split(',');
-    const intPart = parts[0] || '';
-    let decPart = parts[1] || '';
-    decPart = decPart.slice(0, 2); // max 2 decimals
-    return decPart ? `${intPart},${decPart}` : intPart;
   };
 
   const handlePriceChange = (text: string) => {
-    const formattedPrice = formatPrice(text);
-    setPrice(formattedPrice);
+    // Permite apenas números, vírgula e ponto
+    const cleanedText = text.replace(/[^\d,.]/g, '');
+    
+    // Se houver mais de um separador decimal, mantém apenas o último
+    const commaCount = (cleanedText.match(/,/g) || []).length;
+    const dotCount = (cleanedText.match(/\./g) || []).length;
+    
+    if (commaCount + dotCount > 1) {
+      // Encontra a posição do último separador
+      const lastCommaPos = cleanedText.lastIndexOf(',');
+      const lastDotPos = cleanedText.lastIndexOf('.');
+      const lastSeparatorPos = Math.max(lastCommaPos, lastDotPos);
+      
+      // Mantém apenas o último separador
+      const beforeSeparator = cleanedText.substring(0, lastSeparatorPos).replace(/[,.]/g, '');
+      const afterSeparator = cleanedText.substring(lastSeparatorPos);
+      
+      setLocalPrice(beforeSeparator + afterSeparator);
+    } else {
+      setLocalPrice(cleanedText);
+    }
   };
 
   const handlePriceBlur = () => {
-    // pad decimals to two places when leaving the field
     if (!price) return;
-    if (!price.includes(',')) {
-      setPrice(`${price},00`);
+    
+    // Se não há separador decimal, adiciona ",00"
+    if (!price.includes(',') && !price.includes('.')) {
+      setLocalPrice(price + ',00');
       return;
     }
-    const parts = price.split(',');
-    const intPart = parts[0] || '0';
-    let decPart = parts[1] || '';
-    if (decPart.length === 0) decPart = '00';
-    else if (decPart.length === 1) decPart = decPart + '0';
-    else decPart = decPart.slice(0, 2);
-    setPrice(`${intPart},${decPart}`);
+    
+    // Se há separador mas nada depois, adiciona "00"
+    const lastChar = price.charAt(price.length - 1);
+    if (lastChar === ',' || lastChar === '.') {
+      setLocalPrice(price + '00');
+    }
+  };
+
+  const isValidPrice = () => {
+    if (!price.trim()) return false;
+    
+    // Converte para número (substitui vírgula por ponto)
+    const numericValue = parseFloat(price.replace(',', '.'));
+    return !isNaN(numericValue) && numericValue > 0;
   };
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
-  {/* Header */}
-  <View style={styles.header}>
-    <SimpleHeader title="Cadastro produto" />
-  </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <SimpleHeader title="Cadastro produto" onBack={handleBackPress} />
+      </View>
 
       {/* Content */}
       <ScrollView 
@@ -90,13 +118,18 @@ export function AddProductPriceScreen() {
             value={price}
             onChangeText={handlePriceChange}
             onBlur={handlePriceBlur}
-            placeholder="R$ 0,00"
-            keyboardType='default'
+            placeholder="0,00"
+            keyboardType="numeric"
             autoFocus={true}
             containerStyle={styles.inputGroup}
             inputStyle={styles.priceInput}
             labelStyle={styles.inputLabel}
           />
+
+          {/* Helper text */}
+          <Text style={styles.helperText}>
+            Informe o valor em reais (R$). Use vírgula ou ponto para separar os centavos.
+          </Text>
         </View>
       </ScrollView>
 
@@ -105,8 +138,8 @@ export function AddProductPriceScreen() {
         <BottomButton
           title="Prosseguir"
           onPress={handleContinue}
-          disabled={!price.trim()}
-          style={!price.trim() ? { ...styles.continueButton, ...styles.disabledButton } : styles.continueButton}
+          disabled={!isValidPrice()}
+          style={!isValidPrice() ? { ...styles.continueButton, ...styles.disabledButton } : styles.continueButton}
           textStyle={styles.continueButtonText}
         />
       </View>
@@ -114,6 +147,7 @@ export function AddProductPriceScreen() {
   );
 }
 
+// Os estilos permanecem os mesmos
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -128,36 +162,6 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       paddingHorizontal: wp('3%'),
       paddingVertical: hp('1%'),
-    }),
-  },
-  backButton: {
-    padding: wp('2%'),
-    ...(isWeb && {
-      padding: wp('1%'),
-    }),
-  },
-  backIcon: {
-    paddingBottom: hp('1.6%'),
-    fontSize: wp('6%'),
-    color: '#000000',
-    fontWeight: 'bold',
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  headerTitle: {
-    fontSize: wp('5%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    flex: 1,
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  placeholder: {
-    width: wp('6%'),
-    ...(isWeb && {
-      width: wp('4%'),
     }),
   },
   scrollView: {
@@ -187,24 +191,10 @@ const styles = StyleSheet.create({
       lineHeight: wp('4.5%'),
     }),
   },
-  inputContainer: {
-    backgroundColor: '#D6DBDE',
-    borderRadius: wp('2%'),
-    paddingHorizontal: wp('4%'),
-    paddingVertical: hp('1%'),
-    marginBottom: hp('4%'),
-    flexDirection: 'row',
-    alignItems: 'center',
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('2%'),
-      marginBottom: hp('3%'),
-    }),
-  },
   inputGroup: {
-    marginBottom: hp('4%'),
+    marginBottom: hp('2%'),
     ...(isWeb && {
-      marginBottom: hp('2%'),
+      marginBottom: hp('1.5%'),
     }),
   },
   inputLabel: {
@@ -216,23 +206,30 @@ const styles = StyleSheet.create({
       fontSize: wp('3.2%'),
     }),
   },
-  currencySymbol: {
+  priceInput: {
+    backgroundColor: '#D6DBDE',
+    opacity: 0.5,
+    borderRadius: wp('2%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.8%'),
     fontSize: wp('4.5%'),
     fontFamily: fonts.bold700,
     color: '#000000',
-    marginRight: wp('2%'),
+    textAlign: 'center',
     ...(isWeb && {
+      paddingHorizontal: wp('3%'),
+      paddingVertical: hp('2%'),
       fontSize: wp('3.5%'),
-      marginRight: wp('1.5%'),
     }),
   },
-  priceInput: {
-    flex: 1,
-    fontSize: wp('4%'),
+  helperText: {
+    fontSize: wp('3.5%'),
     fontFamily: fonts.regular400,
-    color: '#000000',
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: hp('2%'),
     ...(isWeb && {
-      fontSize: wp('3.2%'),
+      fontSize: wp('2.8%'),
     }),
   },
   buttonContainer: {

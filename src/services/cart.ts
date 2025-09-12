@@ -1,0 +1,349 @@
+import { supabase } from '../lib/supabaseClient';
+
+export interface CartItem {
+  id: string;
+  name: string;
+  brand: string;
+  price: string;
+  quantity: number;
+  subtotal: string;
+  image: string;
+  stock: number;
+  isAvailable: boolean;
+  productId: string;
+  storeId: string | null;
+  storeUserId: string | null;
+  storeName: string;
+}
+
+export interface CartSummary {
+  items: CartItem[];
+  totalItems: number;
+  totalValue: number;
+  totalValueFormatted: string;
+}
+
+// Função para formatar preço
+const formatPrice = (price: number) => {
+  return `R$ ${(price / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+};
+
+// Buscar todos os itens do carrinho do usuário (APENAS itens não processados - purchase_id = null)
+export async function getUserCart(): Promise<CartSummary> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('Usuário não autenticado');
+      return { items: [], totalItems: 0, totalValue: 0, totalValueFormatted: 'R$ 0,00' };
+    }
+
+    const { data, error } = await supabase
+      .from('vw_cart_detail')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('purchase_id', null) // ★ FILTRO PRINCIPAL: Só buscar itens não processados
+      .order('added_at', { ascending: false });
+
+    if (error) {
+      console.error('Erro ao buscar carrinho:', error);
+      return { items: [], totalItems: 0, totalValue: 0, totalValueFormatted: 'R$ 0,00' };
+    }
+
+    if (!data || data.length === 0) {
+      return { items: [], totalItems: 0, totalValue: 0, totalValueFormatted: 'R$ 0,00' };
+    }
+
+    console.log('Carrinho ativo (purchase_id = null):', data.length, 'itens');
+
+    const items: CartItem[] = data.map(item => {
+      const storeId = item.store_id ? item.store_id.toString() : null;
+      const storeUserId = item.store_user_id || null;
+      
+      return {
+        id: item.cart_id.toString(),
+        name: item.product_name,
+        brand: item.brand_name || 'Sem marca',
+        price: formatPrice(item.price),
+        quantity: item.quantity,
+        subtotal: formatPrice(item.subtotal),
+        image: item.main_image_url || 'https://via.placeholder.com/300x300?text=Sem+Imagem',
+        stock: item.stock,
+        isAvailable: item.is_available,
+        productId: item.product_id.toString(),
+        storeId: storeId,
+        storeUserId: storeUserId,
+        storeName: item.store_name || item.company_name || 'Loja'
+      };
+    });
+
+    const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalValue = data.reduce((sum, item) => sum + item.subtotal, 0);
+
+    return {
+      items,
+      totalItems,
+      totalValue,
+      totalValueFormatted: formatPrice(totalValue)
+    };
+  } catch (error) {
+    console.error('Erro ao buscar carrinho:', error);
+    return { items: [], totalItems: 0, totalValue: 0, totalValueFormatted: 'R$ 0,00' };
+  }
+}
+
+export async function addToCart(productId: string, quantity: number = 1): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('Usuário não autenticado');
+      return false;
+    }
+
+    // Verificar se já existe item deste produto no carrinho que NÃO foi processado
+    const { data: existingItem } = await supabase
+      .from('cart')
+      .select('id, quantity')
+      .eq('user_id', user.id)
+      .eq('product_id', parseInt(productId))
+      .is('purchase_id', null) // ★ Só considerar itens não processados
+      .single();
+
+    if (existingItem) {
+      // Atualizar quantidade do item existente
+      const { error } = await supabase
+        .from('cart')
+        .update({ quantity: existingItem.quantity + quantity })
+        .eq('id', existingItem.id);
+
+      if (error) {
+        console.error('Erro ao atualizar quantidade no carrinho:', error);
+        return false;
+      }
+    } else {
+      // Criar novo item no carrinho
+      const { error } = await supabase
+        .from('cart')
+        .insert({
+          user_id: user.id,
+          product_id: parseInt(productId),
+          quantity,
+          purchase_id: null // ★ Explicitamente definir como null para novos itens
+        });
+
+      if (error) {
+        console.error('Erro ao adicionar ao carrinho:', error);
+        return false;
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Erro ao adicionar ao carrinho:', error);
+    return false;
+  }
+}
+
+export async function updateCartItemQuantity(cartItemId: string, quantity: number): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('Usuário não autenticado');
+      return false;
+    }
+
+    if (quantity <= 0) {
+      return await removeFromCart(cartItemId);
+    }
+
+    const { error } = await supabase
+      .from('cart')
+      .update({ quantity })
+      .eq('id', parseInt(cartItemId))
+      .eq('user_id', user.id)
+      .is('purchase_id', null); // ★ Só permitir atualizar itens não processados
+
+    if (error) {
+      console.error('Erro ao atualizar quantidade:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Erro ao atualizar quantidade:', error);
+    return false;
+  }
+}
+
+export async function removeFromCart(cartItemId: string): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('Usuário não autenticado');
+      return false;
+    }
+
+    const { error } = await supabase
+      .from('cart')
+      .delete()
+      .eq('id', parseInt(cartItemId))
+      .eq('user_id', user.id)
+      .is('purchase_id', null); // ★ Só permitir remover itens não processados
+
+    if (error) {
+      console.error('Erro ao remover do carrinho:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Erro ao remover do carrinho:', error);
+    return false;
+  }
+}
+
+export async function clearCart(): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('Usuário não autenticado');
+      return false;
+    }
+
+    const { error } = await supabase
+      .from('cart')
+      .delete()
+      .eq('user_id', user.id)
+      .is('purchase_id', null); // ★ Só limpar itens não processados
+
+    if (error) {
+      console.error('Erro ao limpar carrinho:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Erro ao limpar carrinho:', error);
+    return false;
+  }
+}
+
+export async function isProductInCart(productId: string): Promise<{ inCart: boolean; quantity: number }> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return { inCart: false, quantity: 0 };
+    }
+
+    const { data, error } = await supabase
+      .from('cart')
+      .select('quantity')
+      .eq('user_id', user.id)
+      .eq('product_id', parseInt(productId))
+      .is('purchase_id', null) // ★ Só verificar itens não processados
+      .single();
+
+    if (error) {
+      return { inCart: false, quantity: 0 };
+    }
+
+    return { inCart: true, quantity: data?.quantity || 0 };
+  } catch (error) {
+    console.error('Erro ao verificar produto no carrinho:', error);
+    return { inCart: false, quantity: 0 };
+  }
+}
+
+export async function getCartItemCount(): Promise<number> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return 0;
+    }
+
+    const { data, error } = await supabase
+      .from('cart')
+      .select('quantity')
+      .eq('user_id', user.id)
+      .is('purchase_id', null); // ★ Só contar itens não processados
+
+    if (error) {
+      console.error('Erro ao contar itens do carrinho:', error);
+      return 0;
+    }
+
+    return data?.reduce((total, item) => total + item.quantity, 0) || 0;
+  } catch (error) {
+    console.error('Erro ao contar itens do carrinho:', error);
+    return 0;
+  }
+}
+
+// Validar carrinho antes do checkout
+export async function validateCart(): Promise<{ valid: boolean; issues: string[] }> {
+  try {
+    const cart = await getUserCart();
+    const issues: string[] = [];
+
+    if (cart.items.length === 0) {
+      issues.push('Carrinho está vazio');
+      return { valid: false, issues };
+    }
+
+    cart.items.forEach(item => {
+      if (!item.isAvailable) {
+        issues.push(`${item.name} não está mais disponível`);
+      }
+      if (item.quantity > item.stock) {
+        issues.push(`${item.name} - quantidade solicitada (${item.quantity}) maior que estoque (${item.stock})`);
+      }
+    });
+
+    return { valid: issues.length === 0, issues };
+  } catch (error) {
+    console.error('Erro ao validar carrinho:', error);
+    return { valid: false, issues: ['Erro ao validar carrinho'] };
+  }
+}
+
+export async function syncCart(): Promise<CartSummary> {
+  return await getUserCart();
+}
+
+// ★ NOVA FUNÇÃO: Marcar itens do carrinho como processados
+export async function markCartItemsAsProcessed(purchaseId: number): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('Usuário não autenticado');
+      return false;
+    }
+
+    // Atualizar todos os itens do carrinho do usuário que ainda não foram processados
+    const { data: updatedItems, error } = await supabase
+      .from('cart')
+      .update({ purchase_id: purchaseId })
+      .eq('user_id', user.id)
+      .is('purchase_id', null) // Só atualizar itens que ainda não foram processados
+      .select('id');
+
+    if (error) {
+      console.error('Erro ao marcar itens do carrinho como processados:', error);
+      return false;
+    }
+
+    const itemCount = updatedItems?.length || 0;
+    console.log(`✅ ${itemCount} itens do carrinho marcados como processados com purchase_id: ${purchaseId}`);
+    return true;
+  } catch (error) {
+    console.error('Erro ao marcar itens do carrinho como processados:', error);
+    return false;
+  }
+}

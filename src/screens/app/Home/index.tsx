@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
-import { Image as RNImage } from 'react-native';
 import {
   View,
   Text,
@@ -11,8 +10,10 @@ import {
   Image,
   FlatList,
   Animated,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { fonts } from '../../../constants/fonts';
@@ -22,23 +23,162 @@ import { BottomTabBar } from '../../../components/BottomTabBar';
 import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 import { fontsizes } from '../../../constants/fontSizes';
 import { Colors } from '../../../constants/colors';
+import { 
+  getApprovedProducts, 
+  getApprovedProductsByCategory, 
+  getFeaturedProducts,
+  searchApprovedProducts,
+  Product 
+} from '../../../services/productServices';
 
 export function HomeScreen() {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('produtos');
   const [activeFilter, setActiveFilter] = useState<'todos' | 'drones' | 'control'>('todos');
   const [activeBottomTab, setActiveBottomTab] = useState('home');
+  const [searchQuery, setSearchQuery] = useState('');
   
-  const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
-  
+  // Estados para produtos
+  const [products, setProducts] = useState<Product[]>([]);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
+  const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+
+  // Mapeamento de filtros para categorias (ajuste conforme suas categorias no banco)
+  const filterToCategoryMap = {
+    'todos': null,
+    'drones': '1', // ID da categoria de drones
+    'control': '2', // ID da categoria de controles/acessórios
+  };
+
+  // Carrega produtos iniciais
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // Carrega produtos quando o filtro muda
+  useEffect(() => {
+    if (!isSearching) {
+      if (activeFilter !== 'todos') {
+        loadProductsByCategory();
+      } else {
+        loadAllProducts();
+      }
+    }
+  }, [activeFilter, isSearching]);
+
+  // Busca produtos quando há query de pesquisa
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery.trim()) {
+        setIsSearching(true);
+        handleSearch();
+      } else {
+        setIsSearching(false);
+        setSearchResults([]);
+        // Quando limpa a pesquisa, volta para os produtos normais
+        if (activeFilter !== 'todos') {
+          loadProductsByCategory();
+        } else {
+          loadAllProducts();
+        }
+      }
+    }, 300); // Debounce de 300ms
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  const loadInitialData = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      await Promise.all([
+        loadAllProducts(),
+        loadFeaturedProducts()
+      ]);
+    } catch (err) {
+      console.error('Erro ao carregar dados iniciais:', err);
+      setError('Erro ao carregar produtos. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAllProducts = async () => {
+    try {
+      const allProducts = await getApprovedProducts();
+      setProducts(allProducts);
+    } catch (err) {
+      console.error('Erro ao carregar todos os produtos:', err);
+      setError('Erro ao carregar produtos');
+    }
+  };
+
+  const loadProductsByCategory = async () => {
+    const categoryId = filterToCategoryMap[activeFilter];
+    if (!categoryId) return;
+
+    setLoading(true);
+    try {
+      const categoryProducts = await getApprovedProductsByCategory(categoryId);
+      setProducts(categoryProducts);
+    } catch (err) {
+      console.error('Erro ao carregar produtos por categoria:', err);
+      setError('Erro ao carregar produtos da categoria');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadFeaturedProducts = async () => {
+    try {
+      const featured = await getFeaturedProducts(6); // Busca 6 produtos em destaque
+      setFeaturedProducts(featured);
+    } catch (err) {
+      console.error('Erro ao carregar produtos em destaque:', err);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      setIsSearching(false);
+      setSearchResults([]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const searchResults = await searchApprovedProducts(searchQuery.trim());
+      setSearchResults(searchResults);
+    } catch (err) {
+      console.error('Erro na busca:', err);
+      setError('Erro na busca de produtos');
+      setSearchResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadInitialData();
+    setRefreshing(false);
+  };
 
   const handleDronesPress = () => {
     navigation.navigate('Drones' as never);
   };
 
-  const handleProductPress = () => {
-    navigation.navigate('ProductDetail' as never);
+  const handleProductPress = (product: Product) => {
+    navigation.navigate('ProductDetail' as never, { productId: product.id });
   };
 
   const handleTabPress = (tab: 'produtos' | 'profissionais') => {
@@ -50,20 +190,34 @@ export function HomeScreen() {
 
   const handleBottomTabPress = (tab: string) => {
     setActiveBottomTab(tab);
-    // Add navigation logic here if needed
     if (tab === 'profile') {
-      // Navigate to profile screen
       // navigation.navigate('Profile' as never);
     }
   };
 
-    const categories = [
-      { id: '1', name: 'Drones agras', icon: require('../../../assets/images/categories/drones.png') },
-      { id: '2', name: 'Baterias', icon: require('../../../assets/images/categories/baterias.png') },
-      { id: '3', name: 'Acessórios', icon: require('../../../assets/images/categories/acessorios.png') },
-      { id: '4', name: 'Partes e peças', icon: require('../../../assets/images/categories/partes.png') },
-      { id: '5', name: 'Geradores', icon: require('../../../assets/images/categories/geradores.png') },
-      { id: '6', name: 'Drones Consumer', icon: require('../../../assets/images/categories/dronesconsumer.png') },
+  const handleFilterPress = (filter: 'todos' | 'drones' | 'control') => {
+    setActiveFilter(filter);
+    setSearchQuery(''); // Limpa a busca ao trocar filtro
+    setIsSearching(false);
+  };
+
+  const handleSearchInputChange = (text: string) => {
+    setSearchQuery(text);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setIsSearching(false);
+    setSearchResults([]);
+  };
+
+  const categories = [
+    { id: '1', name: 'Drones agras', icon: require('../../../assets/images/categories/drones.png') },
+    { id: '2', name: 'Baterias', icon: require('../../../assets/images/categories/baterias.png') },
+    { id: '3', name: 'Acessórios', icon: require('../../../assets/images/categories/acessorios.png') },
+    { id: '4', name: 'Partes e peças', icon: require('../../../assets/images/categories/partes.png') },
+    { id: '5', name: 'Geradores', icon: require('../../../assets/images/categories/geradores.png') },
+    { id: '6', name: 'Drones Consumer', icon: require('../../../assets/images/categories/dronesconsumer.png') },
   ];
 
   const renderCategoryItem = ({ item }: { item: any }) => (
@@ -80,194 +234,241 @@ export function HomeScreen() {
     </TouchableOpacity>
   );
 
-  const products = [
-    { id: '1', name: 'Par de Helice U-CW (Branca) [T40,T20P,T50]', price: 'R$ 579,00', installment: 'ou 12x de R$ 54,72 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/par_de_helice_u_cw_branca_t40_t20p_t50_1055_1_f87468c1de7ee3e4c2d134e48a2a4a22.png' },
-    { id: '2', name: 'Bateria inteligente T25', price: 'R$14.900,00', installment: 'ou 12x de R$ 1.408,07 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/bateria_inteligente_t25_213_1_4187030504ef7798e9a0353c6554f23b.png' },
-    { id: '3', name: 'Par de Helice CCW [T30]', price: 'R$520,00', installment: 'ou 12x de R$ 49,14 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/par_de_helice_ccw_t30_1037_1_46929477ab1fef17452491eda76b3a41.png' },
-    { id: '4', name: 'Bateria inteligente T40', price: 'R$17.900,00', installment: 'ou 12x de R$ 1.691,58 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/bateria_inteligente_t40_217_1_1f8a8ea702f365d569393b7e76b22d3e.png' },
-    { id: '5', name: 'Drone T50 DJI', price: 'R$122.000,00', installment: 'ou 12x de R$ 11.529,19 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/drone_t50_dji_7_1_238d8c50a6f0203c29b50163462ec1a9.jpg' },
-    { id: '6', name: 'Bateria WB37 Agrobox [T10,T20,T30,T40,T20P,T50,T25]', price: 'R$490,00', installment: 'ou 12x de R$ 46,31 com juros', pic: 'https://images.tcdn.com.br/img/img_prod/1348407/bateria_wb37_agrobox_t10_t20_t30_t40_t20p_t50_t25_1733_1_7917f29d0834ac7f7e395207d45b0d8f.png' },
-  ];
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyStateText}>
+        {isSearching 
+          ? `Nenhum produto encontrado para "${searchQuery}"` 
+          : 'Nenhum produto disponível'
+        }
+      </Text>
+      {isSearching && (
+        <TouchableOpacity 
+          style={styles.clearSearchButton}
+          onPress={clearSearch}
+        >
+          <Text style={styles.clearSearchText}>Limpar busca</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const renderErrorState = () => (
+    <View style={styles.errorState}>
+      <Text style={styles.errorText}>{error}</Text>
+      <TouchableOpacity 
+        style={styles.retryButton}
+        onPress={() => isSearching ? handleSearch() : loadInitialData()}
+      >
+        <Text style={styles.retryText}>Tentar novamente</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Determina quais produtos mostrar
+  const displayProducts = isSearching ? searchResults : products;
 
   const bannerSrc = require('../../../assets/images/homeImage.png');
-  const { width: iw, height: ih } = RNImage.resolveAssetSource(bannerSrc);
-  const bannerRatio = iw / ih;
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
       {/* Header */}
-      <Header 
+      <Header
         activeTab={activeTab}
         onTabPress={handleTabPress}
         scrollY={scrollY}
       />
 
-      {/* Mobile: Navigation Tabs */}
-      
-
-      <Animated.ScrollView 
-        style={styles.scrollView} 
+      <Animated.ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primaryRed]}
+            tintColor={Colors.primaryRed}
+          />
+        }
       >
+        {/* Tabs - Oculto quando está pesquisando */}
+        {!isWeb && !isSearching && (
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'produtos' && styles.activeTab]}
+              onPress={() => handleTabPress('produtos')}
+            >
+              <Text style={[styles.tabText, activeTab === 'produtos' && styles.activeTabText]}>
+                Produtos
+              </Text>
+            </TouchableOpacity>
 
-      {/* {!isWeb && (
-        <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'produtos' && styles.activeTab]}
-            onPress={() => handleTabPress('produtos')}
-          >
-            <Text style={[styles.tabText, activeTab === 'produtos' && styles.activeTabText]}>
-              Produtos
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'profissionais' && styles.activeTab]}
-            onPress={() => handleTabPress('profissionais')}
-          >
-            <Text style={[styles.tabText, activeTab === 'profissionais' && styles.activeTabText]}>
-              Profissionais
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )} */}
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'profissionais' && styles.activeTab]}
+              onPress={() => handleTabPress('profissionais')}
+            >
+              <Text style={[styles.tabText, activeTab === 'profissionais' && styles.activeTabText]}>
+                Profissionais
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-      {!isWeb && (
-        
-
-      
-     <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'produtos' && styles.activeTab]}
-            onPress={() => handleTabPress('produtos')}
-          >
-            <Text style={[styles.tabText, activeTab === 'produtos' && styles.activeTabText]}>
-              Produtos
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'profissionais' && styles.activeTab]}
-            onPress={() => handleTabPress('profissionais')}
-          >
-            <Text style={[styles.tabText, activeTab === 'profissionais' && styles.activeTabText]}>
-              Profissionais
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-)}
-         {/* Mobile: Search Bar */}
-         {!isWeb && (
-          <View style={styles.searchContainer}>
+        {/* Mobile: Search Bar - Sempre visível */}
+        {!isWeb && (
+          <View style={[
+            styles.searchContainer,
+            isSearching && styles.searchContainerActive
+          ]}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Pesquisar"
-              placeholderTextColor="#000"
+              placeholder="Pesquisar produtos..."
+              placeholderTextColor="#666"
+              value={searchQuery}
+              onChangeText={handleSearchInputChange}
+              returnKeyType="search"
+              onSubmitEditing={handleSearch}
             />
-            <TouchableOpacity style={styles.searchIcon}>
-                      <Image
-                        source={require('../../../assets/icons/search.png')}
-                        style={styles.searchIconText}
-                      />
-            </TouchableOpacity>
+            {searchQuery ? (
+              <TouchableOpacity style={styles.searchIcon} onPress={clearSearch}>
+                <Image
+                  style={styles.searchIconText}
+                />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.searchIcon} onPress={handleSearch}>
+                <Image
+                  source={require('../../../assets/icons/search.png')}
+                  style={styles.searchIconText}
+                />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
-        {/* Banner Placeholder */}
-        <View style={styles.bannerPlaceholder}>
-          <Image
-            source={bannerSrc}
-            style={[styles.banner, { aspectRatio: bannerRatio }]}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* Categories Section */}
-        <View style={styles.categoriesSection}>
-          <Text style={styles.sectionTitle}>Navegue por categorias</Text>
-          <FlatList
-            data={categories}
-            renderItem={renderCategoryItem}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesContainer}
-          />
-        </View>
-
-        {/* Featured Products Section */}
-        
-        {isWeb && (
-        <Text style={styles.sectionTitle}>Destaques</Text>
+        {/* Banner - Oculto quando está pesquisando */}
+        {!isSearching && (
+          <View style={styles.bannerPlaceholder}>
+            <Image
+              source={bannerSrc}
+              style={styles.banner}
+              resizeMode="contain"
+            />
+          </View>
         )}
 
-        
+        {/* Categories Section - Oculto quando está pesquisando */}
+        {!isSearching && (
+          <View style={styles.categoriesSection}>
+            <Text style={styles.sectionTitle}>Navegue por categorias</Text>
+            <FlatList
+              data={categories}
+              renderItem={renderCategoryItem}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesContainer}
+            />
+          </View>
+        )}
+
+        {/* Products Section */}
         <View style={styles.featuredSection}>
-         
+          {/* Título da seção */}
+          {isSearching ? (
+            <Text style={styles.searchTitle}>
+              Resultados para "{searchQuery}"
+            </Text>
+          ) : (
+            <>
+              {isWeb && (
+                <Text style={styles.sectionTitle}>Destaques</Text>
+              )}
+              {!isWeb && (
+                <View style={styles.featuredHeader}>
+                  <Text style={styles.sectionTitle}>Destaques</Text>
+                  <View style={styles.filterContainer}>
+                    <TouchableOpacity
+                      style={[styles.filterButton, activeFilter === 'todos' && styles.activeFilter]}
+                      onPress={() => handleFilterPress('todos')}
+                    >
+                      <Text style={[styles.filterText, activeFilter === 'todos' && styles.activeFilterText]}>
+                        Todos
+                      </Text>
+                    </TouchableOpacity>
 
-         {!isWeb &&(
+                    <TouchableOpacity
+                      style={[styles.filterButton, activeFilter === 'drones' && styles.activeFilter]}
+                      onPress={() => handleFilterPress('drones')}
+                    >
+                      <Text style={[styles.filterText, activeFilter === 'drones' && styles.activeFilterText]}>
+                        Drones
+                      </Text>
+                    </TouchableOpacity>
 
-          <View style={styles.featuredHeader}>
-          <Text style={styles.sectionTitle}>Destaques</Text>
-          <View style={styles.filterContainer}>
-            <TouchableOpacity 
-              style={[styles.filterButton, activeFilter === 'todos' && styles.activeFilter]}
-              onPress={() => setActiveFilter('todos')}
-            >
-              <Text style={[styles.filterText, activeFilter === 'todos' && styles.activeFilterText]}>
-                Todos
+                    <TouchableOpacity
+                      style={[styles.filterButton, activeFilter === 'control' && styles.activeFilter]}
+                      onPress={() => handleFilterPress('control')}
+                    >
+                      <Text style={[styles.filterText, activeFilter === 'control' && styles.activeFilterText]}>
+                        Control
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* Loading State */}
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primaryRed} />
+              <Text style={styles.loadingText}>
+                {isSearching ? 'Buscando produtos...' : 'Carregando produtos...'}
               </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.filterButton, activeFilter === 'drones' && styles.activeFilter]}
-              onPress={() => setActiveFilter('drones')}
-            >
-              <Text style={[styles.filterText, activeFilter === 'drones' && styles.activeFilterText]}>
-                Drones
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.filterButton, activeFilter === 'control' && styles.activeFilter]}
-              onPress={() => setActiveFilter('control')}
-            >
-              <Text style={[styles.filterText, activeFilter === 'control' && styles.activeFilterText]}>
-                Control
-              </Text>
-            </TouchableOpacity>
-          </View>
-          </View>
-         )}
-          
+            </View>
+          )}
+
+          {/* Error State */}
+          {error && !loading && renderErrorState()}
 
           {/* Products Grid */}
-          <FlatList
-            data={products}
-            renderItem={({ item: product }) => (
-              <ProductCard 
-                product={product}
-                onPress={handleProductPress}
-              />
-            )}
-            keyExtractor={(item) => item.id}
-            numColumns={isWeb ? 5 : 2}
-            columnWrapperStyle={styles.productRow}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.productsContainer}
-            scrollEnabled={false}
-          />
+          {!loading && !error && (
+            <>
+              {displayProducts.length > 0 ? (
+                <FlatList
+                  data={displayProducts}
+                  renderItem={({ item: product }) => (
+                    <ProductCard
+                      product={product}
+                      onPress={() => handleProductPress(product)}
+                    />
+                  )}
+                  keyExtractor={(item) => item.id}
+                  numColumns={isWeb ? 5 : 2}
+                  columnWrapperStyle={!isWeb ? styles.productRow : undefined}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.productsContainer}
+                  scrollEnabled={false}
+                />
+              ) : (
+                renderEmptyState()
+              )}
+            </>
+          )}
         </View>
       </Animated.ScrollView>
 
-      {/* Bottom Navigation - Only show on mobile */}
-      <BottomTabBar 
-        activeTab={activeBottomTab}
-        onTabPress={handleBottomTabPress}
-      />
+      {/* Bottom Navigation - Only show on mobile and when not searching */}
+      {/* {!isSearching && (
+        <BottomTabBar
+          activeTab={activeBottomTab}
+          onTabPress={handleBottomTabPress}
+        />
+      )} */}
     </SafeAreaView>
   );
 }
@@ -275,7 +476,7 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',  
+    backgroundColor: '#fff',
   },
 
   tabContainer: {
@@ -306,24 +507,32 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    // marginHorizontal: wp('10%'),
     ...(isWeb && {
       marginHorizontal: wp('0%'),
     }),
   },
   searchContainer: {
     flexDirection: 'row',
-    opacity: 0.5,
     alignItems: 'center',
     marginHorizontal: wp('5%'),
     marginBottom: hp('2.5%'),
-    backgroundColor: '#D6DBDE',
+    backgroundColor: '#F5F5F5',
     borderRadius: wp('3.8%'),
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('1%'),
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  searchContainerActive: {
+    borderColor: Colors.primaryRed,
+    backgroundColor: '#FFF',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   searchInput: {
-    opacity: 0.5,
     flex: 1,
     fontSize: wp('3.4%'),
     fontFamily: fonts.regular400,
@@ -331,37 +540,44 @@ const styles = StyleSheet.create({
   },
   searchIcon: {
     marginLeft: wp('2.5%'),
+    padding: wp('1%'),
   },
   searchIconText: {
     width: wp('6%'),
     height: wp('6%'),
   },
+  searchTitle: {
+    fontSize: wp('4%'),
+    marginLeft: wp('5%'),
+    fontFamily: fonts.semiBold600,
+    color: '#000000',
+    marginBottom: hp('2%'),
+    marginTop: hp('1%'),
+  },
   bannerPlaceholder: {
-  marginBottom: hp('2.5%'),
+    marginBottom: hp('2.5%'),
     marginHorizontal: wp('5%'),
-  overflow: 'hidden',        // keeps rounded corners on the *container*
-  // backgroundColor: '#D6DBDE',// color behind letterboxing
-  ...(isWeb && {
-    marginHorizontal: wp('2%'),
-    marginBottom: hp('1.5%'),
-    marginTop: hp('8%'),
-  }),
+    overflow: 'hidden',
+    ...(isWeb && {
+      marginHorizontal: wp('2%'),
+      marginBottom: hp('1.5%'),
+      marginTop: hp('8%'),
+    }),
   },
 
-  banner:{
+  banner: {
     width: '100%',
     height: undefined,
-    aspectRatio: 16/9,
+    aspectRatio: 16 / 9,
     maxHeight: hp('28%'),
     marginRight: wp('%'),
-
   },
 
   categoriesSection: {
     marginBottom: hp('4%'),
     ...(isWeb && {
       marginHorizontal: wp('2%'),
-      marginBottom: hp('2%'), // Less spacing on web
+      marginBottom: hp('2%'),
     }),
   },
   sectionTitle: {
@@ -371,8 +587,8 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: hp('2%'),
     ...(isWeb && {
-      textAlign: 'center' as any, // Center titles on web
-      fontSize: wp('4%'), // Smaller font size for web
+      textAlign: 'center' as any,
+      fontSize: wp('4%'),
       marginBottom: hp('6%'),
       marginTop: hp('6%'),
     }),
@@ -388,7 +604,7 @@ const styles = StyleSheet.create({
   categoryCardContainer: {
     marginRight: wp('3%'),
     ...(isWeb && {
-      marginRight: wp('1%'), // Smaller spacing between cards on web
+      marginRight: wp('1%'),
     }),
   },
   categoryCard: {
@@ -400,8 +616,8 @@ const styles = StyleSheet.create({
     width: wp('30.5%'),
     height: hp('20%'),
     ...(isWeb && {
-      height: hp('135%'), // More height for web
-      width: wp('36.8%'), // Smaller width for web to fit more cards
+      height: hp('135%'),
+      width: wp('36.8%'),
       paddingVertical: hp('12%'),
     }),
   },
@@ -409,7 +625,7 @@ const styles = StyleSheet.create({
     fontSize: wp('6%'),
     marginBottom: hp('1.25%'),
   },
-  droneIcon:{
+  droneIcon: {
     height: hp('9%'),
     width: wp('15%'),
     marginTop: hp('2.6%'),
@@ -422,11 +638,10 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   featuredSection: {
-  //   marginHorizontal: wp('5%'),
     marginBottom: hp('12%'),
     ...(isWeb && {
       marginHorizontal: wp('2%'),
-      marginBottom: hp('4%'), // Less spacing on web
+      marginBottom: hp('4%'),
     }),
   },
   featuredHeader: {
@@ -450,7 +665,8 @@ const styles = StyleSheet.create({
   filterText: {
     fontSize: wp('3%'),
     fontFamily: fonts.medium500,
-    color: '#000000',borderRadius:10
+    color: '#000000',
+    borderRadius: 10,
   },
   activeFilterText: {
     color: '#fff',
@@ -464,5 +680,67 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: wp('4%'),
   },
-
+  
+  // Estados de loading, erro e vazio
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: hp('10%'),
+  },
+  loadingText: {
+    marginTop: hp('2%'),
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+  },
+  
+  errorState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: hp('8%'),
+    paddingHorizontal: wp('10%'),
+  },
+  errorText: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#FF6B6B',
+    textAlign: 'center',
+    marginBottom: hp('2%'),
+  },
+  retryButton: {
+    backgroundColor: Colors.primaryRed,
+    paddingHorizontal: wp('6%'),
+    paddingVertical: hp('1.5%'),
+    borderRadius: wp('2%'),
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.medium500,
+  },
+  
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: hp('8%'),
+    paddingHorizontal: wp('10%'),
+  },
+  emptyStateText: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: hp('2%'),
+  },
+  clearSearchButton: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1%'),
+    borderRadius: wp('2%'),
+  },
+  clearSearchText: {
+    color: '#666',
+    fontSize: wp('3%'),
+    fontFamily: fonts.medium500,
+  },
 });

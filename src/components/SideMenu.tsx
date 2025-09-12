@@ -14,6 +14,8 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fontsizes } from '../constants/fontSizes';
 import { Colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
+import { useUserType } from '../hooks/useUserType';
 
 interface SideMenuProps {
   isVisible: boolean;
@@ -22,7 +24,9 @@ interface SideMenuProps {
 
 export function SideMenu({ isVisible, onClose }: SideMenuProps) {
   const navigation = useNavigation();
-  const [showMenuOptions, setShowMenuOptions] = useState(false);
+  const { user } = useAuth();
+  const { isCustomer, isSeller, isLoggedIn } = useUserType();
+  const [showMenuOptions, setShowMenuOptions] = useState(true);
   const slideAnim = React.useRef(new Animated.Value(-wp('80%'))).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -59,7 +63,14 @@ export function SideMenu({ isVisible, onClose }: SideMenuProps) {
   }, [isVisible, slideAnim, fadeAnim]);
 
   const handleLoginPress = () => {
-    setShowMenuOptions(true);
+    if (user) {
+      // Se já está logado, mostra as opções do menu
+      setShowMenuOptions(true);
+    } else {
+      // Se não está logado, navega para a tela de login
+      onClose();
+      navigation.navigate('Login' as never);
+    }
   };
 
   const handleBackToLogin = () => {
@@ -76,6 +87,9 @@ export function SideMenu({ isVisible, onClose }: SideMenuProps) {
     // Navigate to appropriate screen based on option
     onClose();
   };
+
+  // Determina se deve mostrar o botão de login ou as opções do menu
+  const shouldShowLoginButton = !user;
 
   if (!isVisible) return null;
 
@@ -113,8 +127,8 @@ export function SideMenu({ isVisible, onClose }: SideMenuProps) {
         </View>
 
         {/* Conditional Content */}
-        {!showMenuOptions ? (
-          // Login/Register Button
+        {!isLoggedIn ? (
+          // Login/Register Button - Mostra quando usuário não está logado
           <View style={styles.loginSection}>
             <TouchableOpacity style={styles.loginButton} onPress={handleLoginPress}>
               <Image style={styles.navIcon}  source={require('../assets/icons/person.png')}></Image>
@@ -128,79 +142,102 @@ export function SideMenu({ isVisible, onClose }: SideMenuProps) {
             <TouchableOpacity 
               style={styles.profileButton} 
               // onPress={() => handleMenuOptionPress('Meu Perfil')}
-              onPress={()=>{navigation.navigate('MyProfiles')}}
+              onPress={()=>{navigation.navigate('MyProfiles' as never)}}
             >
               <Image style={styles.navIcon}  source={require('../assets/icons/person.png')}></Image>
               <Text style={styles.profileButtonText}>Meu Perfil</Text>
             </TouchableOpacity>
             
-            {/* Menu Options */}
+                        {/* Menu Options - Cliente */}
+            {isCustomer && (
+              <>
+                <TouchableOpacity 
+                  style={styles.menuOption} 
+                  onPress={() => navigation.navigate('MyOrders' as never)}
+                >
+                  <Image style={styles.navIcon}  source={require('../assets/icons/persongray.png')}></Image>
+                  <Text style={styles.menuOptionText}>Meus Pedidos</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.menuOption} 
+                  onPress={()=>{navigation.navigate('MyAddresses' as never)}}
+                >
+                  <Image style={styles.navIcon}  source={require('../assets/icons/homegray.png')}></Image>
+                  <Text style={styles.menuOptionText}>Meus Endereços</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Menu Options - Vendedor */}
+            {isSeller && (
+              <>
+                <TouchableOpacity 
+                  style={styles.menuOption} 
+                  onPress={() => navigation.navigate('MyProducts' as never)}
+                >
+                  <Image style={styles.navIcon}  source={require('../assets/icons/persongray.png')}></Image>
+                  <Text style={styles.menuOptionText}>Meus Produtos</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.menuOption} 
+                  onPress={() => navigation.navigate('MySales' as never)}
+                >
+                  <Image style={styles.navIcon}  source={require('../assets/icons/persongray.png')}></Image>
+                  <Text style={styles.menuOptionText}>Minhas Vendas</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Menu Options - Comum para todos */}
             <TouchableOpacity 
               style={styles.menuOption} 
-              // onPress={() => handleMenuOptionPress('Meus Pedidos')}
-              onPress={() => navigation.navigate('MyOrders' as never)}
-            >
-              <Image style={styles.navIcon}  source={require('../assets/icons/persongray.png')}></Image>
-              <Text style={styles.menuOptionText}>Meus Pedidos</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuOption} 
-              // onPress={() => handleMenuOptionPress('Meus Endereços')}
-              onPress={()=>{navigation.navigate('MyAddresses')}}
-            >
-              <Image style={styles.navIcon}  source={require('../assets/icons/homegray.png')}></Image>
-              <Text style={styles.menuOptionText}>Meus Endereços</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuOption} 
-              // onPress={() => handleMenuOptionPress('Alterar Senha')}
               onPress={()=>{navigation.navigate('ChangePassword' as never)}}
             >
               <Image style={styles.navIcon}  source={require('../assets/icons/keygray.png')}></Image>
               <Text style={styles.menuOptionText}>Alterar Senha</Text>
             </TouchableOpacity>
 
-            {/* Gradient Buttons at Bottom */}
-            <View style={styles.gradientButtonsContainer}>
-              <TouchableOpacity 
-                style={styles.gradientButton} 
-                // onPress={() => handleMenuOptionPress('Tornar-se Vendedor')}
-                onPress={()=>{navigation.navigate('SellerRegister' as never)}}
-              >
-                <LinearGradient
-                  colors={['#000000', Colors.primaryRed]}
-                  style={styles.gradientButtonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
+            {/* Gradient Buttons at Bottom - Apenas para clientes */}
+            {isCustomer && (
+              <View style={styles.gradientButtonsContainer}>
+                <TouchableOpacity 
+                  style={styles.gradientButton} 
+                  onPress={()=>{navigation.navigate('SellerRegister' as never)}}
                 >
-                  <Text style={styles.gradientButtonText}>Tornar-se um Vendedor</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.gradientButton} 
-                // onPress={() => handleMenuOptionPress('Tornar-se Profissional')}
-                onPress={()=> navigation.navigate('ProfessionalRegistration' as never
-                  
-                )}
-              >
-                <LinearGradient
-                  colors={['#000000', Colors.primaryRed]}
-                  style={styles.gradientButtonGradient}
-                  start={{ x: 0, y: 1 }}
-                  end={{ x: 0, y: 0 }}
+                  <LinearGradient
+                    colors={['#000000', Colors.primaryRed]}
+                    style={styles.gradientButtonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                  >
+                    <Text style={styles.gradientButtonText}>Tornar-se um Vendedor</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.gradientButton} 
+                  onPress={()=> navigation.navigate('ProfessionalRegistration' as never)}
                 >
-                  <Text style={styles.gradientButtonText}>Tornar-se um Profissional</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+                  <LinearGradient
+                    colors={['#000000', Colors.primaryRed]}
+                    style={styles.gradientButtonGradient}
+                    start={{ x: 0, y: 1 }}
+                    end={{ x: 0, y: 0 }}
+                  >
+                    <Text style={styles.gradientButtonText}>Tornar-se um Profissional</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
 
-            {/* Back Button */}
-            <TouchableOpacity style={styles.backButton} onPress={handleBackToLogin}>
-              <Text style={styles.backButtonText}>← Voltar</Text>
-            </TouchableOpacity>
+            {/* Back Button - Só mostra se o usuário estiver logado e quiser voltar ao estado de login */}
+            {user && (
+              <TouchableOpacity style={styles.backButton} onPress={handleBackToLogin}>
+                <Text style={styles.backButtonText}>← Voltar</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </Animated.View>

@@ -17,7 +17,7 @@ import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
 import { Colors } from '../../../constants/colors';
 
 export function ProfissionaisScreen() {
-  console.log('👨‍💼 ProfissionaisScreen component rendering...');
+  console.log('👨‍💼 ProfissionaisScreenssss component rendering...');
   
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('profissionais');

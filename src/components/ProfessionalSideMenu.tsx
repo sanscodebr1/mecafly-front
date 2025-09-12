@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   Animated,
+  Alert,
 } from 'react-native';
 import { wp, hp, isWeb } from '../utils/responsive';
 import { fonts } from '../constants/fonts';
@@ -13,6 +14,9 @@ import { fontsizes } from '../constants/fontSizes';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
+import { useUserType } from '../hooks/useUserType';
+
 
 interface ProfessionalSideMenuProps {
   isVisible: boolean;
@@ -21,9 +25,17 @@ interface ProfessionalSideMenuProps {
 
 export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMenuProps) {
   const navigation = useNavigation();
+  const { user, signOut } = useAuth();
+  const { isProfessional, isSeller, isLoggedIn } = useUserType();
   const [showMenuOptions, setShowMenuOptions] = useState(false);
   const slideAnim = React.useRef(new Animated.Value(-wp('80%'))).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
+
+  const sellerCtaLabel = isSeller ? 'Área do Vendedor' : 'Tornar-se um Vendedor';
+  const sellerCtaNavigateTo = isSeller ? 'SellerArea' : 'SellerRegistration';
+
+  const professionalCtaLabel = isProfessional ? 'Área do Profissional' : 'Tornar-se um Profissional';
+  const professionalCtaNavigateTo = isProfessional ? 'ProfessionalArea' : 'ProfessionalRegistration';
 
   React.useEffect(() => {
     if (isVisible) {
@@ -39,9 +51,40 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
     }
   }, [isVisible, slideAnim, fadeAnim]);
 
-  const handleLoginPress = () => setShowMenuOptions(true);
+  const handleLoginPress = () => {
+    if (isLoggedIn) {
+      setShowMenuOptions(true);
+    } else {
+      onClose();
+      navigation.navigate('Login' as never);
+    }
+  };
   const handleBackToLogin = () => setShowMenuOptions(false);
   const handleMenuOptionPress = (_: string) => onClose();
+
+  const handleMeusDadosPress = () => {
+    if (isLoggedIn) {
+      navigation.navigate('MyProfiles' as never);
+      onClose();
+    } else {
+      Alert.alert(
+        'Login Necessário',
+        'Você precisa estar logado para acessar seus dados. Deseja fazer login?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+          },
+          {
+            text: 'Fazer Login',
+            onPress: () => {
+              navigation.navigate('Login' as never);
+            },
+          },
+        ]
+      );
+    }
+  };
 
   if (!isVisible) return null;
 
@@ -67,8 +110,8 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
           </TouchableOpacity>
         </View>
 
-        {/* Content */}
-        {!showMenuOptions ? (
+        {!isLoggedIn ? (
+          // NÃO logado
           <View style={styles.loginSection}>
             <TouchableOpacity style={styles.loginButton} onPress={handleLoginPress}>
               <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
@@ -76,21 +119,26 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
             </TouchableOpacity>
           </View>
         ) : (
+          // LOGADO
           <View style={styles.menuOptionsSection}>
-            {/* Highlighted profile button */}
-            <TouchableOpacity
-              style={styles.profileButton}
-              onPress={() => navigation.navigate('MyProfiles' as never)}
-            >
-              <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
-              <Text style={styles.profileButtonText}>Meu Perfil</Text>
-            </TouchableOpacity>
+            {/* Botão de perfil */}
+            {/*     <TouchableOpacity
+      style={styles.menuOption}
+      onPress={() => navigation.navigate('MyProfiles' as never)}
+    >
+      <Image style={styles.navIcon} source={require('../assets/icons/person.png')} />
+      <Text style={styles.menuOptionText}>Meu Perfil</Text>
+    </TouchableOpacity> */}
 
-            {/* Options */}
-            <TouchableOpacity
+            {/* Opções comuns */}
+             <TouchableOpacity
               style={styles.menuOption}
-              onPress={() => handleMenuOptionPress('Meus Dados')}
+              onPress={() => navigation.navigate('Home' as never)}
             >
+              <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
+              <Text style={styles.menuOptionText}>Início</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuOption} onPress={handleMeusDadosPress}>
               <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
               <Text style={styles.menuOptionText}>Meus Dados</Text>
             </TouchableOpacity>
@@ -105,11 +153,28 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
 
             <TouchableOpacity
               style={styles.menuOption}
-              onPress={() => navigation.navigate('MyContracts' as never)}
+              onPress={() => navigation.navigate('MyPurchases' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
+              <Text style={styles.menuOptionText}>Minhas compras</Text>
+            </TouchableOpacity>
+
+
+            {/*     <TouchableOpacity
+      style={styles.menuOption}
+      onPress={() => navigation.navigate('MyContracts' as never)}
+    >
+      <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+      <Text style={styles.menuOptionText}>Minhas contratações</Text>
+    </TouchableOpacity> */}
+
+{/*             <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate('Documents' as never)}
             >
               <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
-              <Text style={styles.menuOptionText}>Minhas contratações</Text>
-            </TouchableOpacity>
+              <Text style={styles.menuOptionText}>Documentos</Text>
+            </TouchableOpacity> */}
 
             <TouchableOpacity
               style={styles.menuOption}
@@ -119,42 +184,35 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
               <Text style={styles.menuOptionText}>Alterar Senha</Text>
             </TouchableOpacity>
 
-            {/* Gradient actions */}
-            <View style={styles.gradientButtonsContainer}>
-              <TouchableOpacity
-                style={styles.gradientButton}
-                onPress={() => navigation.navigate('SellerArea' as never)}
-              >
-                <LinearGradient
-                  colors={['#000000', Colors.primaryRed]}
-                  style={styles.gradientButtonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                >
-                  <Text style={styles.gradientButtonText}>Tornar-se um Vendedor</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+            {/* Dinâmicos: vendedor / profissional */}
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate(isSeller ? 'SellerArea' as never : 'SellerRegister' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+              <Text style={styles.menuOptionText}>
+                {isSeller ? 'Área do Vendedor' : 'Tornar-se um Vendedor'}
+              </Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.gradientButton}
-                onPress={() => navigation.navigate('ProfessionalRegistration' as never)}
-              >
-                <LinearGradient
-                  colors={['#000000', Colors.primaryRed]}
-                  style={styles.gradientButtonGradient}
-                  start={{ x: 0, y: 1 }}
-                  end={{ x: 0, y: 0 }}
-                >
-                  <Text style={styles.gradientButtonText}>Tornar-se um Profissional</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate(isProfessional ? 'ProfessionalArea' as never : 'ProfessionalRegistration' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
+              <Text style={styles.menuOptionText}>
+                {isProfessional ? 'Área do Profissional' : 'Tornar-se um Profissional'}
+              </Text>
+            </TouchableOpacity>
 
-            <TouchableOpacity style={styles.backButton} onPress={handleBackToLogin}>
-              <Text style={styles.backButtonText}>← Voltar</Text>
+            {/* Logout */}
+            <TouchableOpacity style={styles.menuOption} onPress={signOut}>
+              <Image style={styles.navIcon} source={require('../assets/icons/keygray.png')} />
+              <Text style={styles.menuOptionText}>Sair</Text>
             </TouchableOpacity>
           </View>
         )}
+
       </Animated.View>
     </View>
   );
@@ -294,6 +352,14 @@ const styles = StyleSheet.create({
     fontSize: wp('4%'),
     fontFamily: fonts.medium500,
     color: '#666',
+    ...(isWeb && { fontSize: wp('3%') }),
+  },
+  accessDeniedText: {
+    fontSize: fontsizes.size16,
+    fontFamily: fonts.medium500,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: hp('3%'),
     ...(isWeb && { fontSize: wp('3%') }),
   },
 });

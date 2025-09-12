@@ -14,16 +14,22 @@ import { SideMenu } from './SideMenu';
 import { ProfessionalSideMenu } from './ProfessionalSideMenu';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
+import { useUserType } from '../hooks/useUserType';
+import { UserStatusBadge } from './UserStatusBadge';
 
 interface HeaderProps {
-  activeTab: 'produtos' | 'profissionais';
-  onTabPress: (tab: 'produtos' | 'profissionais') => void;
+  activeTab?: 'produtos' | 'profissionais';
+  onTabPress?: (tab: 'produtos' | 'profissionais') => void;
   scrollY?: Animated.Value;
   useProfessionalMenu?: boolean;
+  onBack?: () => void;
 }
 
-export function Header({ activeTab, onTabPress, scrollY, useProfessionalMenu = false }: HeaderProps) {
-  const navigation = useNavigation(); // 👈 Get navigation
+export function Header({ activeTab = 'produtos', onTabPress, scrollY, useProfessionalMenu = true, onBack }: HeaderProps) {
+  const navigation = useNavigation();
+  const { user } = useAuth();
+  const { isProfessional } = useUserType();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   
   // Animated values for header shrinking (mobile only)
@@ -59,10 +65,10 @@ export function Header({ activeTab, onTabPress, scrollY, useProfessionalMenu = f
   return (
     <>
       <Animated.View style={[styles.header, { height: isWeb ? undefined : headerHeight }]}>
-        {!isWeb && (       
+        {!isWeb && (
           <Animated.View style={{ transform: [{ scale: isWeb ? 1 : iconScale }] }}>
-            <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
-              <Text style={styles.menuIcon}>☰</Text>
+            <TouchableOpacity style={styles.menuButton} onPress={onBack ? onBack : handleMenuPress}>
+              <Text style={styles.menuIcon}>{onBack ? '←' : '☰'}</Text>
             </TouchableOpacity>
           </Animated.View>
         )}
@@ -70,23 +76,21 @@ export function Header({ activeTab, onTabPress, scrollY, useProfessionalMenu = f
         <TouchableOpacity
           onPress={() => navigation.navigate('Home' as never)}
         >
-
-        <Animated.View style={[styles.logoContainer, { transform: [{ scale: isWeb ? 1 : logoScale }] }]}>
-          <Image 
-            source={require('../assets/images/logo.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </Animated.View>
+          <Animated.View style={[styles.logoContainer, { transform: [{ scale: isWeb ? 1 : logoScale }] }]}>
+            <Image 
+              source={require('../assets/images/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </Animated.View>
         </TouchableOpacity>
-
         
         {/* Web: Navigation Tabs in Header */}
         {isWeb && (
           <View style={styles.webTabContainer}>
             <TouchableOpacity 
               style={[styles.webTab, activeTab === 'produtos' && styles.activeWebTab]}
-              onPress={() => onTabPress('produtos')}
+              onPress={() => (onTabPress ? onTabPress('produtos') : undefined)}
             >
               <Text style={[styles.webTabText, activeTab === 'produtos' && styles.activeWebTabText]}>
                 Produtos
@@ -95,7 +99,7 @@ export function Header({ activeTab, onTabPress, scrollY, useProfessionalMenu = f
             
             <TouchableOpacity 
               style={[styles.webTab, activeTab === 'profissionais' && styles.activeWebTab]}
-              onPress={() => onTabPress('profissionais')}
+              onPress={() => (onTabPress ? onTabPress('profissionais') : undefined)}
             >
               <Text style={[styles.webTabText, activeTab === 'profissionais' && styles.activeWebTabText]}>
                 Profissionais
@@ -130,7 +134,7 @@ export function Header({ activeTab, onTabPress, scrollY, useProfessionalMenu = f
       </Animated.View>
 
       {/* Side Menu */}
-      {useProfessionalMenu ? (
+      {useProfessionalMenu || isProfessional ? (
         <ProfessionalSideMenu isVisible={isMenuVisible} onClose={handleCloseMenu} />
       ) : (
         <SideMenu isVisible={isMenuVisible} onClose={handleCloseMenu} />

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// screens/SellerAreaScreen.tsx
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,11 +14,37 @@ import { fonts } from '../../../constants/fonts';
 import { Header } from '../../../components/Header';
 import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 import { Colors } from '../../../constants/colors';
+import { useAuth } from '../../../context/AuthContext';
+import { supabase } from '../../../lib/supabaseClient';
+import { PendingMessage } from '../../../components/PendingMessage';
 
 export function SellerAreaScreen() {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('produtos');
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+  const { user } = useAuth();
+
+  const [storeStatus, setStoreStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStore = async () => {
+      if (!user?.id) return;
+      const { data, error } = await supabase
+        .from('store_profile')
+        .select('status')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Erro ao buscar loja:', error);
+        return;
+      }
+
+      setStoreStatus(data?.status ?? null);
+    };
+
+    fetchStore();
+  }, [user?.id]);
 
   const handleTabPress = (tab: 'produtos' | 'profissionais') => {
     setActiveTab(tab);
@@ -27,22 +54,10 @@ export function SellerAreaScreen() {
   };
 
   const handleButtonPress = (screen: string) => {
-    console.log('Navigating to:', screen);
-    // Navigate to respective screens
-    if (screen === 'MyProducts') {
-      navigation.navigate('MyProducts' as never);
-    }
-    // if (screen === 'MySales')
-    // Add other navigation cases as needed
-    if (screen === 'MySales') {
-      navigation.navigate('MySales' as never);
-    }
-    if (screen === 'MyProfile'){
-      navigation.navigate('Profile' as never);
-    }
-    if (screen === 'Questions'){
-      navigation.navigate('Questions' as never);
-    }
+    if (screen === 'MyProducts') navigation.navigate('MyProducts' as never);
+    if (screen === 'MySales') navigation.navigate('MySales' as never);
+    if (screen === 'MyProfile') navigation.navigate('Profile' as never);
+    if (screen === 'Questions') navigation.navigate('SellerQuestionsListScreen' as never);
   };
 
   const sellerButtons = [
@@ -54,14 +69,12 @@ export function SellerAreaScreen() {
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
-      {/* Header */}
       <Header 
         activeTab={activeTab}
         onTabPress={handleTabPress}
         scrollY={scrollY}
       />
 
-      {/* Content */}
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -69,22 +82,24 @@ export function SellerAreaScreen() {
         scrollEventThrottle={scrollEventThrottle}
       >
         <View style={styles.contentContainer}>
-          {/* Title */}
           <Text style={styles.mainTitle}>Área vendedor</Text>
 
-          {/* Seller Buttons */}
-          <View style={styles.buttonsContainer}>
-            {sellerButtons.map((button) => (
-              <TouchableOpacity
-                key={button.id}
-                style={styles.sellerButton}
-                onPress={() => handleButtonPress(button.screen)}
-              >
-                <Text style={styles.buttonText}>{button.title}</Text>
-                <Text style={styles.buttonArrow}>→</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {storeStatus === 'pending' ? (
+            <PendingMessage type="da sua loja" />
+          ) : (
+            <View style={styles.buttonsContainer}>
+              {sellerButtons.map((button) => (
+                <TouchableOpacity
+                  key={button.id}
+                  style={styles.sellerButton}
+                  onPress={() => handleButtonPress(button.screen)}
+                >
+                  <Text style={styles.buttonText}>{button.title}</Text>
+                  <Text style={styles.buttonArrow}>→</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -92,40 +107,27 @@ export function SellerAreaScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   scrollView: {
     flex: 1,
-    ...(isWeb && {
-      marginHorizontal: wp('2%'),
-    }),
+    ...(isWeb && { marginHorizontal: wp('2%') }),
   },
   contentContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('3%'),
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('2%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('2%') }),
   },
   mainTitle: {
     fontSize: wp('6%'),
     fontFamily: fonts.bold700,
-    color: '#000000',
+    color: '#000',
     textAlign: 'center',
     marginBottom: hp('6%'),
-    ...(isWeb && {
-      fontSize: wp('5%'),
-      marginBottom: hp('4%'),
-    }),
+    ...(isWeb && { fontSize: wp('5%'), marginBottom: hp('4%') }),
   },
   buttonsContainer: {
     gap: hp('3%'),
-    ...(isWeb && {
-      gap: hp('2%'),
-    }),
+    ...(isWeb && { gap: hp('2%') }),
   },
   sellerButton: {
     flexDirection: 'row',
@@ -135,24 +137,17 @@ const styles = StyleSheet.create({
     borderRadius: wp('3%'),
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('3%'),
-    ...(isWeb && {
-      paddingHorizontal: wp('4%'),
-      paddingVertical: hp('2.5%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('4%'), paddingVertical: hp('2.5%') }),
   },
   buttonText: {
     fontSize: wp('4.5%'),
     fontFamily: fonts.semiBold600,
     color: '#fff',
-    ...(isWeb && {
-      fontSize: wp('3.5%'),
-    }),
+    ...(isWeb && { fontSize: wp('3.5%') }),
   },
   buttonArrow: {
     fontSize: wp('5%'),
     color: '#fff',
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
+    ...(isWeb && { fontSize: wp('4%') }),
   },
 });

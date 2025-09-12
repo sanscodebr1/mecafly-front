@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 import { SimpleHeader } from '../../../components/SimpleHeader';
 import { BottomButton } from '../../../components/BottomButton';
 import * as ImagePicker from 'expo-image-picker';
+import { useProductCreation } from '../../../context/ProductCreationContext';
 
 interface UploadedImage {
   id: string;
@@ -25,7 +26,16 @@ interface UploadedImage {
 export function AddProductImagesScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const { productData, setUploadedImages } = useProductCreation();
+  
+  const [uploadedImages, setLocalUploadedImages] = useState<UploadedImage[]>([]);
+
+  useEffect(() => {
+    // Load existing images if available
+    if (productData.uploadedImages) {
+      setLocalUploadedImages(productData.uploadedImages);
+    }
+  }, []);
 
   const handleBackPress = () => {
     navigation.goBack();
@@ -45,6 +55,11 @@ export function AddProductImagesScreen() {
   };
 
   const handleUploadImage = async () => {
+    if (uploadedImages.length >= 5) {
+      Alert.alert('Limite atingido', 'Você pode adicionar no máximo 5 imagens por produto.');
+      return;
+    }
+
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
@@ -61,7 +76,8 @@ export function AddProductImagesScreen() {
           id: `image_${Date.now()}`,
           uri: result.assets[0].uri,
         };
-        setUploadedImages(prev => [...prev, newImage]);
+        const updatedImages = [...uploadedImages, newImage];
+        setLocalUploadedImages(updatedImages);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -70,14 +86,29 @@ export function AddProductImagesScreen() {
   };
 
   const handleRemoveImage = (id: string) => {
-    setUploadedImages(prev => prev.filter(img => img.id !== id));
+    Alert.alert(
+      'Remover imagem',
+      'Deseja remover esta imagem?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Remover', 
+          style: 'destructive',
+          onPress: () => {
+            const updatedImages = uploadedImages.filter(img => img.id !== id);
+            setLocalUploadedImages(updatedImages);
+          }
+        },
+      ]
+    );
   };
 
   const handleContinue = () => {
     if (uploadedImages.length > 0) {
-      console.log('Uploaded images:', uploadedImages);
-      // Navigate to next screen (AddProductPrice)
+      setUploadedImages(uploadedImages);
       navigation.navigate('AddProductPrice' as never);
+    } else {
+      Alert.alert('Imagem obrigatória', 'Adicione pelo menos uma imagem do produto para continuar.');
     }
   };
 
@@ -97,10 +128,10 @@ export function AddProductImagesScreen() {
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
-  {/* Header */}
-  <View style={styles.header}>
-  <SimpleHeader title="Cadastro produto" />
-  </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <SimpleHeader title="Cadastro produto" onBack={handleBackPress} />
+      </View>
 
       {/* Content */}
       <ScrollView 
@@ -116,14 +147,31 @@ export function AddProductImagesScreen() {
           </Text>
           
           {/* Upload Area - Thin Bar */}
-          <TouchableOpacity style={styles.uploadArea} onPress={handleUploadImage}>
+          <TouchableOpacity 
+            style={[
+              styles.uploadArea, 
+              uploadedImages.length >= 5 && styles.uploadAreaDisabled
+            ]} 
+            onPress={handleUploadImage}
+            disabled={uploadedImages.length >= 5}
+          >
             <View style={styles.uploadContent}>
-              <Text style={styles.uploadText}>Anexe aqui</Text>
+              <Text style={[
+                styles.uploadText,
+                uploadedImages.length >= 5 && styles.uploadTextDisabled
+              ]}>
+                {uploadedImages.length >= 5 ? 'Limite máximo atingido' : 'Anexe aqui'}
+              </Text>
               <View style={styles.uploadIcon}>
-              <Image source={require('../../../assets/icons/cloud.png')} style={styles.cloudIcon} />
+                <Image source={require('../../../assets/icons/cloud.png')} style={styles.cloudIcon} />
               </View>
             </View>
           </TouchableOpacity>
+
+          {/* Counter */}
+          <Text style={styles.counterText}>
+            {uploadedImages.length}/5 imagens adicionadas
+          </Text>
 
           {/* Uploaded Images Grid */}
           {uploadedImages.length > 0 && (
@@ -164,36 +212,6 @@ const styles = StyleSheet.create({
       paddingVertical: hp('1%'),
     }),
   },
-  backButton: {
-    padding: wp('2%'),
-    ...(isWeb && {
-      padding: wp('1%'),
-    }),
-  },
-  backIcon: {
-    paddingBottom: hp('1.6%'),
-    fontSize: wp('6%'),
-    color: '#000000',
-    fontWeight: 'bold',
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  headerTitle: {
-    fontSize: wp('5%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    flex: 1,
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  placeholder: {
-    width: wp('6%'),
-    ...(isWeb && {
-      width: wp('4%'),
-    }),
-  },
   scrollView: {
     flex: 1,
     ...(isWeb && {
@@ -225,11 +243,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#D6DBDE',
     borderRadius: wp('2%'),
     paddingVertical: hp('1.8%'),
-    marginBottom: hp('4%'),
+    marginBottom: hp('2%'),
     ...(isWeb && {
       paddingVertical: hp('2.5%'),
-      marginBottom: hp('3%'),
     }),
+  },
+  uploadAreaDisabled: {
+    backgroundColor: '#E8E8E8',
+    opacity: 0.6,
   },
   uploadContent: {
     flexDirection: 'row',
@@ -248,6 +269,9 @@ const styles = StyleSheet.create({
       fontSize: wp('3.2%'),
     }),
   },
+  uploadTextDisabled: {
+    color: '#999',
+  },
   uploadIcon: {
     alignItems: 'center',
   },
@@ -255,14 +279,24 @@ const styles = StyleSheet.create({
     height: hp('4%'),
     width: hp('4%'),
   },
+  counterText: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: hp('3%'),
+    ...(isWeb && {
+      fontSize: wp('2.8%'),
+    }),
+  },
   imagesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap:wp('4.5%')
+    gap: wp('4.5%')
   },
   imageContainer: {
     width: '30%',
-    marginBottom: hp('0%'),
+    marginBottom: hp('2%'),
     position: 'relative',
     ...(isWeb && {
       width: '45%',

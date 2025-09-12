@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,45 +6,201 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { fonts } from '../../../constants/fonts';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
 import { fontsizes } from '../../../constants/fontSizes';
+import { supabase } from '../../../lib/supabaseClient';
 
-const mockProduct = {
-  id: 1,
-  title: 'Drone T50 DJI',
-  brand: 'DJI',
-  price: 122000,
-  status: 'Ativo',
-  createdAt: '24/07/2025',
+type RouteParams = {
+  questionId: number;     // id da pergunta raiz
+  productId?: number;     // opcional; se não vier, pegamos da pergunta
 };
 
-const mockQuestions = [
-  {
-    id: 1,
-    text: 'Lorem Ipsum é simplesmente uma simulação de texto da indústria tipográfica e de impressos?',
-  },
-];
+type Question = {
+  id: number;
+  created_at: string;
+  user_id: string | null;
+  content: string | null;
+  product_id: number | null;
+  reply_to_question: number | null;
+  store_profile_id: number | null;
+  is_answered: boolean | null;
+};
+
+type ProductMini = {
+  product_id: number;
+  product_name: string | null;
+  brand_name: string | null;
+  price: number | null; // em centavos
+  status?: string | null;
+  product_created_at?: string | null;
+  main_image_url?: string | null;
+};
 
 export function QuestionsAnswerScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const { questionId, productId: productIdFromRoute } = route.params as RouteParams;
+
   const [answer, setAnswer] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  const [root, setRoot] = useState<Question | null>(null);
+  const [replies, setReplies] = useState<Question[]>([]);
+  const [product, setProduct] = useState<ProductMini | null>(null);
+
+  const effectiveProductId = useMemo(
+    () => productIdFromRoute ?? root?.product_id ?? null,
+    [productIdFromRoute, root]
+  );
 
   const handleBackPress = () => {
     navigation.goBack();
   };
 
-  const handleSendAnswer = () => {
-    console.log('Answer sent:', answer);
-    setAnswer('');
+  const fetchThread = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      // 1) pega a pergunta raiz
+      const { data: rootRows, error: rootErr } = await supabase
+        .from<Question>('product_questions')
+        .select('*')
+        .eq('id', questionId)
+        .limit(1);
+
+      if (rootErr) throw rootErr;
+      const rootItem = (rootRows ?? [])[0];
+      if (!rootItem) {
+        Alert.alert('Aviso', 'Pergunta não encontrada.');
+        setRoot(null);
+        setReplies([]);
+        setProduct(null);
+        return;
+      }
+      setRoot(rootItem);
+
+      // 2) pega replies
+      const { data: replyRows, error: repErr } = await supabase
+        .from<Question>('product_questions')
+        .select('*')
+        .eq('reply_to_question', questionId)
+        .order('created_at', { ascending: true });
+
+      if (repErr) throw repErr;
+      setReplies(replyRows ?? []);
+
+      // 3) produto (da view)
+      const pid = productIdFromRoute ?? rootItem.product_id;
+      if (pid) {
+        const { data: prods, error: pErr } = await supabase
+          .from<ProductMini>('vw_product_detail')
+          .select('product_id, product_name, brand_name, price, main_image_url, product_created_at, status')
+          .eq('product_id', pid)
+          .limit(1);
+
+        if (pErr) throw pErr;
+        setProduct((prods ?? [])[0] ?? null);
+      } else {
+        setProduct(null);
+      }
+    } catch (e) {
+      console.error('Erro ao carregar thread:', e);
+      Alert.alert('Erro', 'Não foi possível carregar a pergunta.');
+    } finally {
+      setLoading(false);
+    }
+  }, [questionId, productIdFromRoute]);
+
+  useEffect(() => {
+    fetchThread();
+  }, [fetchThread]);
+
+  const fmtBRL = (priceCents?: number | null) => {
+    if (priceCents == null) return 'R$0,00';
+    const v = priceCents / 100;
+    return `R$${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+  const handleSendAnswer = async () => {
+    const content = answer.trim();
+    if (!content) {
+      Alert.alert('Atenção', 'Digite a resposta.');
+      return;
+    }
+    if (!root) return;
+
+    try {
+      setSending(true);
+
+      // usuário logado
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session.session?.user?.id ?? null;
+
+      // insere resposta
+      const { error: insErr, data: inserted } = await supabase
+        .from('product_questions')
+        .insert({
+          user_id: userId,
+          content,
+          product_id: root.product_id,
+          reply_to_question: root.id,
+          store_profile_id: root.store_profile_id, // mantém mesmo store_profile da raiz
+        })
+        .select('*')
+        .single();
+
+      if (insErr) throw insErr;
+
+      // marca raiz como respondida (se ainda não estiver)
+      if (!root.is_answered) {
+        const { error: upErr } = await supabase
+          .from('product_questions')
+          .update({ is_answered: true })
+          .eq('id', root.id);
+
+        if (upErr) throw upErr;
+        setRoot({ ...root, is_answered: true });
+      }
+
+      // atualiza lista local
+      setReplies(prev => [...prev, inserted as Question]);
+      setAnswer('');
+    } catch (e) {
+      console.error('Erro ao enviar resposta:', e);
+      Alert.alert('Erro', 'Não foi possível enviar sua resposta.');
+    } finally {
+      setSending(false);
+    }
   };
+
+  // ===== UI =====
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, getWebStyles()]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Perguntas:</Text>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
-      {/* Header */}
+
+      {/* Header (mesma estrutura visual que você já usa) */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
           <Text style={styles.backIcon}>←</Text>
@@ -60,31 +216,44 @@ export function QuestionsAnswerScreen() {
           <View style={styles.card}>
             {/* Status Pill */}
             <View style={styles.statusPill}>
-              <Text style={styles.statusPillText}>{mockProduct.status}</Text>
+              <Text style={styles.statusPillText}>{product?.status ?? '—'}</Text>
             </View>
 
             <View style={styles.cardRow}>
+              {/* Só placeholder aqui, mas você pode exibir Image com product.main_image_url se quiser */}
               <View style={styles.imagePlaceholder} />
               <View style={styles.cardInfo}>
-                <Text style={styles.productTitle}>{mockProduct.title}</Text>
+                <Text style={styles.productTitle}>{product?.product_name ?? `Produto #${effectiveProductId ?? '-'}`}</Text>
                 <Text style={styles.productBrand}>
-                  <Text style={styles.productBrandLabel}>Marca:</Text> {mockProduct.brand}
+                  <Text style={styles.productBrandLabel}>Marca:</Text> {product?.brand_name ?? 'N/A'}
                 </Text>
-                <Text style={styles.productPrice}>
-                  R${mockProduct.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </Text>
+                <Text style={styles.productPrice}>{fmtBRL(product?.price)}</Text>
               </View>
             </View>
 
-            <Text style={styles.cardDate}>Criado em: {mockProduct.createdAt}</Text>
+            <Text style={styles.cardDate}>
+              Criado em: {product?.product_created_at ? new Date(product.product_created_at).toLocaleDateString('pt-BR') : '—'}
+            </Text>
           </View>
 
           {/* Questions Section */}
           <Text style={styles.sectionTitle}>Perguntas:</Text>
-          {mockQuestions.map((q) => (
-            <View key={q.id} style={styles.questionCard}>
+
+          {/* pergunta raiz */}
+          {root && (
+            <View style={styles.questionCard}>
               <View style={styles.avatarPlaceholder} />
-              <Text style={styles.questionText}>{q.text}</Text>
+              <Text style={styles.questionText}>
+                {root.content ?? ''}
+              </Text>
+            </View>
+          )}
+
+          {/* replies */}
+          {replies.map(r => (
+            <View key={r.id} style={[styles.questionCard, { borderColor: '#eee' }]}>
+              <View style={styles.avatarPlaceholder} />
+              <Text style={styles.questionText}>{r.content ?? ''}</Text>
             </View>
           ))}
 
@@ -95,11 +264,12 @@ export function QuestionsAnswerScreen() {
             placeholderTextColor="#777"
             value={answer}
             onChangeText={setAnswer}
+            editable={!sending}
           />
 
           {/* Send Button */}
-          <TouchableOpacity style={styles.sendButton} onPress={handleSendAnswer}>
-            <Text style={styles.sendButtonText}>Responder</Text>
+          <TouchableOpacity style={styles.sendButton} onPress={handleSendAnswer} disabled={sending}>
+            <Text style={styles.sendButtonText}>{sending ? 'Enviando...' : 'Responder'}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -107,6 +277,7 @@ export function QuestionsAnswerScreen() {
   );
 }
 
+// === estilos originais mantidos ===
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   header: {

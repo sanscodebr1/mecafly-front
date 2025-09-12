@@ -1,84 +1,206 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
+  Image,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { fonts } from '../../../constants/fonts';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
 import { SimpleHeader } from '../../../components/SimpleHeader';
-import { InputField } from '../../../components/InputField';
 import { BottomButton } from '../../../components/BottomButton';
+import { useProductCreation } from '../../../context/ProductCreationContext';
+import { createCompleteProduct } from '../../../services/productServices';
 
 export function AddProductSummaryScreen() {
   const navigation = useNavigation();
+  const { productData, clearProductData } = useProductCreation();
+  const [creating, setCreating] = useState(false);
 
-  // Mock data for now
-  const product = {
-    title: 'Drone T50 DJI',
-    brand: 'DJI',
-    price: 122000,
-    installment: 11529.19,
-    description: `Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged.`
-  };
-
-  const [title, setTitle] = useState(product.title);
-  const [brand, setBrand] = useState(product.brand);
-  const [price, setPrice] = useState(String(product.price));
+  useEffect(() => {
+    // Validate that we have all required data
+    if (!productData.selectedCategory || !productData.productDetails || 
+        !productData.uploadedImages?.length || !productData.price) {
+      Alert.alert('Dados incompletos', 'Algumas informações estão faltando. Voltando ao início.');
+      navigation.navigate('AddProduct' as never);
+    }
+  }, []);
 
   const handleBackPress = () => {
     navigation.goBack();
   };
 
-  const handleContinue = () => {
-    // Go to next step or finish
-  navigation.navigate('AdPending' as never);
+  const calculateInstallmentValue = (price: number) => {
+    // Simple calculation with 2.5% monthly interest for 12 installments
+    const monthlyRate = 0.025;
+    const installments = 12;
+    const installmentValue = (price * monthlyRate * Math.pow(1 + monthlyRate, installments)) / 
+                           (Math.pow(1 + monthlyRate, installments) - 1);
+    return installmentValue;
   };
+
+  const getPriceAsNumber = () => {
+    if (!productData.price) return 0;
+    return parseFloat(productData.price.replace(/\./g, '').replace(',', '.'));
+  };
+
+  const formatPrice = (value: number) => {
+    return value.toLocaleString('pt-BR', { 
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2 
+    });
+  };
+
+const handleContinue = async () => {
+    if (!productData.selectedCategory || !productData.productDetails || 
+        !productData.uploadedImages?.length || !productData.price || !productData.shippingConfig) {
+      Alert.alert('Erro', 'Dados do produto incompletos.');
+      return;
+    }
+
+    try {
+      setCreating(true);
+
+      const priceValue = getPriceAsNumber();
+      const imageUris = productData.uploadedImages.map(img => img.uri);
+
+      const shippingConfig = {
+        height: parseFloat(productData.shippingConfig.height.replace(',', '.')),
+        width: parseFloat(productData.shippingConfig.width.replace(',', '.')),
+        length: parseFloat(productData.shippingConfig.length.replace(',', '.')),
+        weight: parseFloat(productData.shippingConfig.weight.replace(',', '.')),
+        declaredValue: parseFloat(productData.shippingConfig.declaredValue.replace(',', '.')),
+      };
+
+      const productId = await createCompleteProduct(
+        productData.productDetails.titulo,
+        productData.productDetails.descricao,
+        productData.productDetails.marcaId,
+        productData.selectedCategory.id,
+        priceValue,
+        imageUris,
+        productData.productDetails.stock,
+        shippingConfig
+      );
+
+      clearProductData();
+
+      navigation.navigate('AdPending' as never)
+
+    } catch (error) {
+      console.error('Error creating product:', error);
+      Alert.alert(
+        'Erro',
+        'Não foi possível criar o produto. Tente novamente.',
+        [
+          {
+            text: 'Tentar novamente',
+            onPress: () => setCreating(false),
+          },
+        ]
+      );
+    }
+  };
+
+  if (!productData.selectedCategory || !productData.productDetails || 
+      !productData.uploadedImages?.length || !productData.price) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#22D883" />
+        <Text style={styles.loadingText}>Carregando dados...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const priceValue = getPriceAsNumber();
+  const installmentValue = calculateInstallmentValue(priceValue);
+  const mainImage = productData.uploadedImages[0];
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>  
-  {/* Header */}
-  <View style={styles.header}>
-    <SimpleHeader title="Cadastro produto" />
-  </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <SimpleHeader title="Cadastro produto" onBack={handleBackPress} />
+      </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.contentContainer}>
           {/* Section Title */}
           <Text style={styles.sectionTitle}>Resumo</Text>
 
-          {/* Image Placeholder */}
+          {/* Product Image */}
           <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>×</Text>
+            {mainImage ? (
+              <Image source={{ uri: mainImage.uri }} style={styles.productImage} />
+            ) : (
+              <Text style={styles.imagePlaceholderText}>×</Text>
+            )}
           </View>
 
           {/* Product Info */}
           <View style={styles.infoContainer}>
-
-          <View style={styles.infoContainer}>
-            <Text style={styles.productTitle}>{product.title}</Text>
-            <Text style={styles.productBrand}><Text style={styles.productBrandLabel}>Marca:</Text> {product.brand}</Text>
-            <Text style={styles.productPrice}>R${product.price.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</Text>
-            <Text style={styles.productInstallment}>ou <Text style={styles.installmentBold}>12x</Text> de R$ {product.installment.toLocaleString('pt-BR', {minimumFractionDigits: 2})} com juros</Text>
+            <Text style={styles.productTitle}>{productData.productDetails.titulo}</Text>
+            <Text style={styles.productBrand}>
+              <Text style={styles.productBrandLabel}>Marca:</Text> {productData.productDetails.marca}
+            </Text>
+            <Text style={styles.productPrice}>R$ {formatPrice(priceValue)}</Text>
+            <Text style={styles.productInstallment}>
+              ou <Text style={styles.installmentBold}>12x</Text> de R$ {formatPrice(installmentValue)} com juros
+            </Text>
           </View>
-
 
           {/* Description */}
           <View style={styles.descriptionContainer}>
             <Text style={styles.descriptionTitle}>Descrição geral:</Text>
-            <Text style={styles.descriptionText}>{product.description}</Text>
+            <Text style={styles.descriptionText}>{productData.productDetails.descricao}</Text>
           </View>
-        </View>
+
+          {/* Additional Images */}
+          {productData.uploadedImages.length > 1 && (
+            <View style={styles.additionalImagesContainer}>
+              <Text style={styles.additionalImagesTitle}>Imagens adicionais:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.additionalImagesScroll}>
+                {productData.uploadedImages.slice(1).map((image, index) => (
+                  <Image 
+                    key={image.id} 
+                    source={{ uri: image.uri }} 
+                    style={styles.additionalImage} 
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Category Info */}
+          <View style={styles.categoryContainer}>
+            <Text style={styles.categoryText}>
+              <Text style={styles.categoryLabel}>Categoria:</Text> {productData.selectedCategory.name}
+            </Text>
+          </View>
         </View>
       </ScrollView>
 
       {/* Continue Button */}
       <View style={styles.buttonContainer}>
-        <BottomButton title="Prosseguir" onPress={handleContinue} style={styles.continueButton} textStyle={styles.continueButtonText} />
+        <BottomButton 
+          title={creating ? "Criando produto..." : "Finalizar cadastro"} 
+          onPress={handleContinue} 
+          style={styles.continueButton} 
+          textStyle={styles.continueButtonText}
+          disabled={creating}
+        />
+        {creating && (
+          <ActivityIndicator 
+            size="small" 
+            color="#22D883" 
+            style={styles.creatingIndicator} 
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -98,36 +220,6 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       paddingHorizontal: wp('3%'),
       paddingVertical: hp('1%'),
-    }),
-  },
-  backButton: {
-    padding: wp('2%'),
-    ...(isWeb && {
-      padding: wp('1%'),
-    }),
-  },
-  backIcon: {
-    paddingBottom: hp('1.6%'),
-    fontSize: wp('6%'),
-    color: '#000000',
-    fontWeight: 'bold',
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  headerTitle: {
-    fontSize: wp('5%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    flex: 1,
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
-  },
-  placeholder: {
-    width: wp('6%'),
-    ...(isWeb && {
-      width: wp('4%'),
     }),
   },
   scrollView: {
@@ -162,10 +254,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: hp('3%'),
+    overflow: 'hidden',
     ...(isWeb && {
       height: hp('20%'),
       marginBottom: hp('2%'),
     }),
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   imagePlaceholderText: {
     color: '#bbb',
@@ -179,30 +277,6 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       marginBottom: hp('1.5%'),
     }),
-  },
-  inputGroup: {
-    marginBottom: hp('3%'),
-  },
-  inputLabel: {
-    fontSize: wp('4%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    marginBottom: hp('1%'),
-  },
-  titleInput: {
-    fontSize: wp('5%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-  },
-  inputSmall: {
-    fontSize: wp('4%'),
-    fontFamily: fonts.regular400,
-    color: '#000000',
-  },
-  priceInput: {
-    fontSize: wp('6%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
   },
   productTitle: {
     fontSize: wp('6%'),
@@ -267,6 +341,43 @@ const styles = StyleSheet.create({
       lineHeight: hp('2%'),
     }),
   },
+  additionalImagesContainer: {
+    marginBottom: hp('2%'),
+  },
+  additionalImagesTitle: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.bold700,
+    color: '#222',
+    marginBottom: hp('1%'),
+  },
+  additionalImagesScroll: {
+    flexDirection: 'row',
+  },
+  additionalImage: {
+    width: wp('20%'),
+    height: wp('20%'),
+    borderRadius: wp('2%'),
+    marginRight: wp('2%'),
+    ...(isWeb && {
+      width: wp('15%'),
+      height: wp('15%'),
+    }),
+  },
+  categoryContainer: {
+    marginTop: hp('1%'),
+  },
+  categoryText: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    ...(isWeb && {
+      fontSize: wp('2.8%'),
+    }),
+  },
+  categoryLabel: {
+    fontFamily: fonts.bold700,
+    color: '#222',
+  },
   buttonContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('3%'),
@@ -292,5 +403,14 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       fontSize: wp('3.5%'),
     }),
+  },
+  creatingIndicator: {
+    marginTop: hp('2%'),
+  },
+  loadingText: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginTop: hp('2%'),
   },
 });

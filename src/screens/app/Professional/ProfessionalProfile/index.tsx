@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   Image,
   TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -17,11 +18,21 @@ import { Header } from '../../../../components/Header';
 import { InputField } from '../../../../components/InputField';
 import { BottomButton } from '../../../../components/BottomButton';
 import { fontsizes } from '../../../../constants/fontSizes';
+import { useAuth } from '../../../../context/AuthContext';
+import { upsertProfessionalProfile } from '../../../../services/userProfiles';
+import * as ImagePicker from 'expo-image-picker';
+import { uploadUserProfileImage } from '../../../../services/storage';
+import { Picker } from '@react-native-picker/picker';
+import { 
+  getUserServiceAttributeValues, 
+  upsertUserServiceAttributeValues 
+} from '../../../../services/professionalServices';
 
 export function ProfessionalProfileScreen() {
   const navigation = useNavigation();
+  const { user, refreshUserProfile, isProfessional, createProfessionalProfile } = useAuth();
+  
   const [formData, setFormData] = useState({
-    email: '',
     nome: '',
     descricao: '',
     marca: '',
@@ -29,18 +40,147 @@ export function ProfessionalProfileScreen() {
     detalhesEquipamento: '',
     valorAluguel: '',
   });
-  const [selectedCrops, setSelectedCrops] = useState(['Milho']);
+  const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
   const [cropPrices, setCropPrices] = useState({
     Milho: '',
     Soja: '',
-    Cafe: '',
+    Café: '',
   });
-  const [equipmentCrops, setEquipmentCrops] = useState(['Milho']);
+  const [temEquipamento, setTemEquipamento] = useState<boolean | null>(null);
   const [alugarEquipamento, setAlugarEquipamento] = useState('Sim');
+  const [uploading, setUploading] = useState(false);
+  const [profileImageUrl, setProfileImageUrl] = useState<string | undefined>(undefined);
+  const [localImageUri, setLocalImageUri] = useState<string | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+  const [professionalProfile, setProfessionalProfile] = useState<any>(null);
 
   const crops = ['Milho', 'Soja', 'Café'];
+  const equipamento = [
+    { id: 1, label: 'Sim', bool: true },
+    { id: 2, label: 'Não', bool: false },
+  ];
 
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+
+  // Carregar dados do perfil ao inicializar
+  useEffect(() => {
+    loadProfileData();
+  }, []);
+
+  const loadProfileData = async () => {
+    try {
+      // Garantir que existe perfil profissional
+      let currentProfessionalProfile = user?.professional_profile;
+      
+      if (!currentProfessionalProfile && user) {
+        console.log('Criando perfil profissional...');
+        currentProfessionalProfile = await createProfessionalProfile();
+        if (!currentProfessionalProfile) {
+          Alert.alert('Erro', 'Não foi possível criar o perfil profissional.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (!currentProfessionalProfile || !currentProfessionalProfile.id) {
+        console.log('Perfil profissional não encontrado');
+        setLoading(false);
+        return;
+      }
+
+      setProfessionalProfile(currentProfessionalProfile);
+      setProfileImageUrl(currentProfessionalProfile.user_picture || undefined);
+
+      // Carregar descrição diretamente do perfil
+      if (currentProfessionalProfile.description) {
+        setFormData(prev => ({ 
+          ...prev, 
+          descricao: currentProfessionalProfile.description || '' 
+        }));
+      }
+
+      // Carregar valores de atributos existentes
+      const attributeValues = await getUserServiceAttributeValues(currentProfessionalProfile.id);
+      
+      const newSelectedCrops: string[] = [];
+      const newCropPrices = { Milho: '', Soja: '', Café: '' };
+      
+      // Mapear valores para o estado
+      attributeValues.forEach((value: any) => {
+        switch (value.attribute_id) {
+          case 1: // Milho
+            if (value.value) {
+              newCropPrices.Milho = value.value;
+              newSelectedCrops.push('Milho');
+            }
+            break;
+          case 2: // Soja
+            if (value.value) {
+              newCropPrices.Soja = value.value;
+              newSelectedCrops.push('Soja');
+            }
+            break;
+          case 3: // Café
+            if (value.value) {
+              newCropPrices.Café = value.value;
+              newSelectedCrops.push('Café');
+            }
+            break;
+          case 4: // has_equipment
+            setTemEquipamento(value.value === 'true');
+            break;
+          case 5: // marca
+            setFormData(prev => ({ ...prev, marca: value.value || '' }));
+            break;
+          case 6: // capacidade
+            setFormData(prev => ({ ...prev, capacidade: value.value || '' }));
+            break;
+          case 7: // detalhes do equipamento
+            setFormData(prev => ({ ...prev, detalhesEquipamento: value.value || '' }));
+            break;
+          case 8: // rent_equipment
+            setAlugarEquipamento(value.value === 'true' ? 'Sim' : 'Não');
+            break;
+          case 9: // rent_hour_time (valor aluguel)
+            setFormData(prev => ({ ...prev, valorAluguel: value.value || '' }));
+            break;
+        }
+      });
+
+      setSelectedCrops(newSelectedCrops);
+      setCropPrices(newCropPrices);
+
+    } catch (error) {
+      console.error('Erro ao carregar dados do perfil:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProfilePhoto = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permissionResult.status !== 'granted') {
+        console.log('Permissão de acesso à galeria negada');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        selectionLimit: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setLocalImageUri(asset.uri);
+      }
+    } catch (error) {
+      console.error('Erro ao selecionar imagem:', error);
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -57,14 +197,6 @@ export function ProfessionalProfileScreen() {
     }
   };
 
-  const handleEquipmentCropSelection = (crop: string) => {
-    if (equipmentCrops.includes(crop)) {
-      setEquipmentCrops(equipmentCrops.filter(c => c !== crop));
-    } else {
-      setEquipmentCrops([...equipmentCrops, crop]);
-    }
-  };
-
   const handleCropPriceChange = (crop: string, price: string) => {
     setCropPrices(prev => ({
       ...prev,
@@ -72,29 +204,156 @@ export function ProfessionalProfileScreen() {
     }));
   };
 
-  const handleContinue = () => {
-    console.log('Professional profile data:', {
-      ...formData,
-      selectedCrops,
-      cropPrices,
-      equipmentCrops,
-      alugarEquipamento
-    });
-    navigation.navigate('RegistrationAnalysis' as never);
-  };
+  const handleContinue = async () => {
+    if (!professionalProfile?.id) {
+      Alert.alert('Erro', 'Perfil profissional não encontrado.');
+      return;
+    }
 
-  const handleProfilePhoto = () => {
-    console.log('Profile photo upload');
+    // Validar se pelo menos uma cultura foi selecionada com preço
+    const hasValidCrop = selectedCrops.some(crop => {
+      const price = cropPrices[crop as keyof typeof cropPrices];
+      return price && price.trim() !== '';
+    });
+
+    if (!hasValidCrop) {
+      Alert.alert('Atenção', 'Selecione pelo menos uma cultura e defina seu preço.');
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      if (!user) {
+        Alert.alert('Erro', 'Usuário não encontrado.');
+        return;
+      }
+
+      let finalUrl = profileImageUrl;
+      
+      // Salvar foto de perfil se houver
+      if (localImageUri) {
+        finalUrl = await uploadUserProfileImage(user.id, localImageUri);
+        
+        if (finalUrl) {
+          // Atualizar perfil profissional com nova imagem
+          await upsertProfessionalProfile({
+            ...professionalProfile,
+            user_picture: finalUrl,
+          });
+          setProfileImageUrl(finalUrl);
+          setLocalImageUri(undefined);
+        }
+      }
+
+      // Salvar descrição diretamente na tabela professional_profile
+      if (formData.descricao && formData.descricao.trim() !== '') {
+        await upsertProfessionalProfile({
+          ...professionalProfile,
+          description: formData.descricao.trim(),
+        });
+      }
+
+      // Preparar valores de atributos para salvar
+      const attributeValues = [];
+
+      // Adicionar preços das culturas selecionadas
+      if (selectedCrops.includes('Milho') && cropPrices.Milho) {
+        attributeValues.push({ attribute_id: 1, value: cropPrices.Milho });
+      }
+      if (selectedCrops.includes('Soja') && cropPrices.Soja) {
+        attributeValues.push({ attribute_id: 2, value: cropPrices.Soja });
+      }
+      if (selectedCrops.includes('Café') && cropPrices.Café) {
+        attributeValues.push({ attribute_id: 3, value: cropPrices.Café });
+      }
+
+      // Adicionar status do equipamento
+      if (temEquipamento !== null) {
+        attributeValues.push({ attribute_id: 4, value: temEquipamento.toString() });
+      }
+
+      // Adicionar dados do equipamento se tem equipamento
+      if (temEquipamento) {
+        // Marca
+        if (formData.marca && formData.marca.trim() !== '') {
+          attributeValues.push({ attribute_id: 5, value: formData.marca.trim() });
+        }
+        
+        // Capacidade
+        if (formData.capacidade && formData.capacidade.trim() !== '') {
+          attributeValues.push({ attribute_id: 6, value: formData.capacidade.trim() });
+        }
+        
+        // Detalhes do equipamento
+        if (formData.detalhesEquipamento && formData.detalhesEquipamento.trim() !== '') {
+          attributeValues.push({ attribute_id: 7, value: formData.detalhesEquipamento.trim() });
+        }
+        
+        // Rent equipment
+        attributeValues.push({ attribute_id: 8, value: (alugarEquipamento === 'Sim').toString() });
+        
+        // Valor do aluguel (se quiser alugar)
+        if (alugarEquipamento === 'Sim' && formData.valorAluguel && formData.valorAluguel.trim() !== '') {
+          attributeValues.push({ attribute_id: 9, value: formData.valorAluguel.trim() });
+        }
+      }
+
+      // Salvar atributos no banco
+      const success = await upsertUserServiceAttributeValues(professionalProfile.id, attributeValues);
+
+      if (success) {
+        // Atualizar contexto de autenticação
+        await refreshUserProfile();
+        
+        Alert.alert(
+          'Sucesso',
+          'Perfil profissional salvo com sucesso!',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.navigate('ProfessionalDocuments' as never),
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Erro', 'Não foi possível salvar o perfil. Tente novamente.');
+      }
+
+    } catch (error) {
+      console.error('Erro ao salvar perfil profissional:', error);
+      Alert.alert('Erro', 'Ocorreu um erro inesperado. Tente novamente.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleBack = () => navigation.goBack();
 
+  const getImageSource = () => {
+    if (localImageUri) {
+      return { uri: localImageUri };
+    }
+    if (profileImageUrl) {
+      return { uri: profileImageUrl };
+    }
+    return null;
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <Text>Carregando perfil...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Shared shrinking header */}
       <Header scrollY={scrollY} onBack={handleBack} />
 
-      {/* Main Content */}
       <ScrollView 
         style={styles.mainContent} 
         showsVerticalScrollIndicator={false}
@@ -102,38 +361,26 @@ export function ProfessionalProfileScreen() {
         scrollEventThrottle={scrollEventThrottle}
       >
 
-        {/* Title */}
         <Text style={styles.title}>Meu perfil profissional</Text>
 
-        {/* Profile Photo Section */}
+        {/* Foto */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Foto de perfil</Text>
-          <TouchableOpacity style={styles.profilePhotoPlaceholder} onPress={handleProfilePhoto}>
-            <Text style={styles.photoPlaceholderText}>+</Text>
+          <TouchableOpacity 
+            style={styles.profilePhotoPlaceholder} 
+            onPress={handleProfilePhoto}
+            activeOpacity={0.7}
+          >
+            {getImageSource() ? (
+              <Image source={getImageSource()!} style={styles.profileImage} />
+            ) : (
+              <Text style={styles.photoPlaceholderText}>+</Text>
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Personal Details */}
+        {/* Dados básicos */}
         <View style={styles.section}>
-          <InputField
-            label="Email"
-            value={formData.email}
-            onChangeText={(value) => handleInputChange('email', value)}
-            placeholder="Digite seu email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            containerStyle={styles.inputContainer}
-          />
-
-          <InputField
-            label="Nome"
-            value={formData.nome}
-            onChangeText={(value) => handleInputChange('nome', value)}
-            placeholder="Digite seu nome"
-            autoCapitalize="words"
-            containerStyle={styles.inputContainer}
-          />
-
           <InputField
             label="Descrição do perfil"
             value={formData.descricao}
@@ -146,16 +393,14 @@ export function ProfessionalProfileScreen() {
           />
         </View>
 
-        {/* Crops Section */}
+        {/* Culturas */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Culturas que atende:</Text>
-          <View style={styles.cropsListContainer}>
           <View style={styles.cropsListContainer}>
             {crops.map((crop) => {
               const selected = selectedCrops.includes(crop);
               return (
                 <View key={crop} style={styles.cropRow}>
-                  {/* Left: pill */}
                   <TouchableOpacity
                     style={[styles.cropPill, selected && styles.cropPillSelected]}
                     onPress={() => handleCropSelection(crop)}
@@ -165,80 +410,93 @@ export function ProfessionalProfileScreen() {
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Middle: helper text */}
                   {selected && (
-                    <Text numberOfLines={2} style={styles.priceHelper}>
-                      Informe o valor cobrado por hectare:
-                    </Text>
-                  )}
-
-                  {/* Right: price box */}
-                  {selected && (
-                    <View style={styles.priceBox}>
-                      <Text style={styles.priceCurrency}>R$</Text>
-                      <TextInput placeholder='' value={cropPrices[crop as keyof typeof cropPrices]}
-                      
-                        onChangeText={(v) => handleCropPriceChange(crop, v)}
-                        
-                        style={styles.priceField}
-                        
-                        keyboardType="numeric"
-                        >
-
-                        </TextInput>
-                    </View>
+                    <>
+                      <Text numberOfLines={2} style={styles.priceHelper}>
+                        Informe o valor cobrado por hectare:
+                      </Text>
+                      <View style={styles.priceBox}>
+                        <Text style={styles.priceCurrency}>R$</Text>
+                        <TextInput 
+                          placeholder=''
+                          value={cropPrices[crop as keyof typeof cropPrices]}
+                          onChangeText={(v) => handleCropPriceChange(crop, v)}
+                          style={styles.priceField}
+                          keyboardType="numeric"
+                        />
+                      </View>
+                    </>
                   )}
                 </View>
               );
             })}
           </View>
-          </View>
         </View>
 
-        {/* Equipment Ownership */}
+        {/* Equipamento próprio */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tem equipamento próprio:</Text>
-          <View style={styles.cropsContainer}>
-            {crops.map((crop) => (
+          <View style={styles.rentalOptionsContainer}>
+            {equipamento.map(opt => (
               <TouchableOpacity
-                key={crop}
+                key={opt.id}
                 style={[
-                  styles.cropButton,
-                  equipmentCrops.includes(crop) && styles.cropPillSelected
+                  styles.rentalPill,
+                  temEquipamento === opt.bool && styles.rentalPillSelected
                 ]}
-                onPress={() => handleEquipmentCropSelection(crop)}
+                onPress={() => setTemEquipamento(opt.bool)}
               >
                 <Text style={[
-                  styles.cropPillText,
-                  equipmentCrops.includes(crop) && styles.cropPillTextSelected
+                  styles.rentalPillText,
+                  temEquipamento === opt.bool && styles.rentalPillTextSelected
                 ]}>
-                  {crop}
+                  {opt.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Equipment Details */}
-        {equipmentCrops.length > 0 && (
+        {/* Características só se "Sim" */}
+        {temEquipamento && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Quais as características do seu equipamento?</Text>
             
-            <InputField
-              label="Marca"
-              value={formData.marca}
-              onChangeText={(value) => handleInputChange('marca', value)}
-              placeholder="Selecione"
-              containerStyle={styles.inputContainer}
-            />
+            {/* Dropdown Marca */}
+            <Text style={styles.inputLabel}>Marca</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={formData.marca}
+                onValueChange={(itemValue) => handleInputChange('marca', itemValue)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Selecione a marca" value="" />
+                <Picker.Item label="DJI" value="DJI" />
+                <Picker.Item label="XAG" value="XAG" />
+                <Picker.Item label="Parrot" value="Parrot" />
+                <Picker.Item label="SenseFly" value="SenseFly" />
+                <Picker.Item label="Yuneec" value="Yuneec" />
+              </Picker>
+            </View>
 
-            <InputField
-              label="Capacidade"
-              value={formData.capacidade}
-              onChangeText={(value) => handleInputChange('capacidade', value)}
-              placeholder="Selecione"
-              containerStyle={styles.inputContainer}
-            />
+            {/* Dropdown Capacidade */}
+            <Text style={styles.inputLabel}>Capacidade</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={formData.capacidade}
+                onValueChange={(itemValue) => handleInputChange('capacidade', itemValue)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Selecione a capacidade" value="" />
+                <Picker.Item label="10L" value="10L" />
+                <Picker.Item label="15L" value="15L" />
+                <Picker.Item label="20L" value="20L" />
+                <Picker.Item label="25L" value="25L" />
+                <Picker.Item label="30L" value="30L" />
+                <Picker.Item label="35L" value="35L" />
+                <Picker.Item label="40L" value="40L" />
+              </Picker>
+            </View>
 
             <InputField
               label="Detalhes do equipamento"
@@ -253,38 +511,28 @@ export function ProfessionalProfileScreen() {
           </View>
         )}
 
-        {/* Equipment Rental */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Deseja alugar o seu equipamento separadamente:</Text>
-          <View style={styles.rentalOptionsContainer}>
-            <TouchableOpacity
-              style={[
-                styles.rentalPill,
-                alugarEquipamento === 'Não' && styles.rentalPillSelected
-              ]}
-              onPress={() => setAlugarEquipamento('Não')}
-            >
-              <Text style={[
-                styles.rentalPillText,
-                alugarEquipamento === 'Não' && styles.rentalPillTextSelected
-              ]}>
-                Não
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.rentalPill,
-                alugarEquipamento === 'Sim' && styles.rentalPillSelected
-              ]}
-              onPress={() => setAlugarEquipamento('Sim')}
-            >
-              <Text style={[
-                styles.rentalPillText,
-                alugarEquipamento === 'Sim' && styles.rentalPillTextSelected
-              ]}>
-                Sim
-              </Text>
-            </TouchableOpacity>
+        {/* Aluguel do equipamento - só se temEquipamento for true */}
+        {temEquipamento && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Deseja alugar o seu equipamento separadamente:</Text>
+            <View style={styles.rentalOptionsContainer}>
+              {['Não', 'Sim'].map(opt => (
+              <TouchableOpacity
+                key={opt}
+                style={[
+                  styles.rentalPill,
+                  alugarEquipamento === opt && styles.rentalPillSelected
+                ]}
+                onPress={() => setAlugarEquipamento(opt)}
+              >
+                <Text style={[
+                  styles.rentalPillText,
+                  alugarEquipamento === opt && styles.rentalPillTextSelected
+                ]}>
+                  {opt}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {alugarEquipamento === 'Sim' && (
@@ -304,322 +552,69 @@ export function ProfessionalProfileScreen() {
             </View>
           )}
         </View>
+      )}
 
-      </ScrollView>
-      
-      {/* Continue Button (fixed bottom) */}
-      <View style={styles.fixedButtonContainer}>
-        <BottomButton title="Continuar" onPress={handleContinue} />
-      </View>
-     </SafeAreaView>
-   );
- }
- 
- const styles = StyleSheet.create({
-   container: {
-     flex: 1,
-     backgroundColor: '#fff',
-   },
-   header: {
-     flexDirection: 'row',
-     alignItems: 'center',
-     justifyContent: 'space-between',
-     paddingHorizontal: wp('5%'),
-     paddingVertical: hp('2%'),
-     backgroundColor: '#fff',
-     borderBottomWidth: 1,
-     borderBottomColor: '#f0f0f0',
-     ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('1%') }),
-   },
-   menuButton: {
-     padding: wp('1%'),
-   },
-   menuIcon: {
-     fontSize: wp('6%'),
-     color: '#000000',
-     ...(isWeb && { fontSize: wp('4%') }),
-   },
-   logoContainer: {
-     alignItems: 'center',
-   },
-   logoImage: {
-     width: wp('35%'),
-     height: hp('13%'),
-     ...(isWeb && { width: wp('25%'), height: hp('8%') }),
-   },
-   notificationButton: {
-     width: wp('10%'),
-     height: wp('10%'),
-     borderRadius: wp('5%'),
-     backgroundColor: '#ECECEC',
-     alignItems: 'center',
-     justifyContent: 'center',
-     ...(isWeb && { width: wp('8%'), height: wp('8%'), borderRadius: wp('4%') }),
-   },
-   notificationIcon: {
-     fontSize: wp('4.5%'),
-     color: '#fff',
-     ...(isWeb && { fontSize: wp('3.5%') }),
-   },
-   mainContent: {
-     flex: 1,
-     paddingHorizontal: wp('5%'),
-     paddingTop: hp('3%'),
-     ...(isWeb && { paddingHorizontal: wp('3%'), paddingTop: hp('2%') }),
-   },
-   title: {
-     textAlign: 'left',
-     fontSize: fontsizes.size24,
-     fontFamily: fonts.bold700,
-     color: '#000000',
-     marginBottom: hp('4%'),
-     ...(isWeb && { fontSize: wp('4%'), marginBottom: hp('3%') }),
-   },
-   section: {
-     marginBottom: hp('4%'),
-     ...(isWeb && { marginBottom: hp('3%') }),
-   },
-   sectionTitle: {
-     fontSize: fontsizes.size18,
-     fontFamily: fonts.bold700,
-     textAlign: 'left',
-     color: '#000000',
-     marginBottom: hp('2%'),
-     ...(isWeb && { fontSize: wp('3.2%'), marginBottom: hp('1.5%') }),
-   },
-   profilePhotoPlaceholder: {
-     width: wp('30%'),
-     height: wp('30%'),
-    backgroundColor: '#D6DBDE',
-     borderRadius: wp('3%'),
-     alignItems: 'center',
-     justifyContent: 'center',
-     alignSelf: 'center',
-     ...(isWeb && { width: wp('20%'), height: wp('20%'), borderRadius: wp('2%') }),
-   },
-   photoPlaceholderText: {
-     fontSize: wp('8%'),
-     color: '#999',
-     fontFamily: fonts.bold700,
-     ...(isWeb && { fontSize: wp('6%') }),
-   },
-   inputContainer: {
-     marginBottom: hp('3%'),
-     ...(isWeb && { marginBottom: hp('2%') }),
-   },
-   inputLabel: {
-     fontSize: wp('3.5%'),
-     fontFamily: fonts.bold700,
-     color: '#000000',
-     marginBottom: hp('1%'),
-     ...(isWeb && { fontSize: wp('2.8%'), marginBottom: hp('0.5%') }),
-   },
-   textInput: {
-    backgroundColor: '#D6DBDE',
-    opacity: 0.5,
-     borderRadius: wp('2%'),
-     paddingHorizontal: wp('3%'),
-     paddingVertical: hp('2%'),
-     fontSize: wp('3.5%'),
-     fontFamily: fonts.regular400,
-     color: '#000000',
-     ...(isWeb && { 
-       paddingHorizontal: wp('2%'), 
-       paddingVertical: hp('1.5%'),
-       fontSize: wp('2.8%') 
-     }),
-   },
-   textArea: {
-     minHeight: hp('25%'),
-     textAlignVertical: 'top',
-     ...(isWeb && { minHeight: hp('8%') }),
-   },
-   cropsContainer: {
-     flexDirection: 'row',
-     flexWrap: 'wrap',
-     gap: wp('2%'),
-     marginBottom: hp('2%'),
-     ...(isWeb && { gap: wp('1.5%'), marginBottom: hp('1.5%') }),
-   },
-   cropsListContainer: {
-     marginBottom: hp('2%'),
-     ...(isWeb && { marginBottom: hp('1.5%') }),
-   },
-   cropRow: {
-     flexDirection: 'row',
-     alignItems: 'center',            // center all three columns vertically
-     gap: wp('3%'),                   // space between columns
-     marginBottom: hp('2.5%'),
-   },
-  
-   cropPill: {
-     backgroundColor: '#D6DBDE',
-     borderRadius: wp('7%'),          // more “pill” look
-     paddingHorizontal: wp('5%'),
-     paddingVertical: hp('1.3%'),
-     minWidth: wp('22%'),             // keeps left column consistent
-     alignItems: 'center',
-   },
-   cropPillSelected: {
-     backgroundColor: '#22D883',
-   },
-   cropPillText: {
-     fontSize: wp('3.5%'),
-     fontFamily: fonts.regular400,
-     color: '#666',
-     ...(isWeb && { fontSize: wp('2.8%') }),
-   },
+    </ScrollView>
+    
+    <View style={styles.fixedButtonContainer}>
+      <BottomButton 
+        title={uploading ? "Salvando..." : "Continuar"} 
+        onPress={handleContinue}
+        disabled={uploading || loading || !professionalProfile?.id}
+      />
+    </View>
+  </SafeAreaView>
+);
+}
 
-   cropButton: {
-     backgroundColor: '#D6DBDE',
-     borderRadius: wp('2%'),          // more “pill” look
-     paddingHorizontal: wp('5%'),
-     paddingVertical: hp('1.3%'),
-     minWidth: wp('28.6%'),             // keeps left column consistent
-     alignItems: 'center',
-   },
-  
-   priceHelper: {
-     flex: 1,                         // takes the middle column space
-     fontSize: wp('3.1%'),
-     fontFamily: fonts.regular400,
-     color: '#000000',
-   },
-
-   priceBox: {
-     flexDirection: 'row',
-     alignItems: 'center',
-     backgroundColor: '#E6E6E6',
-     borderRadius: wp('3%'),
-     paddingHorizontal: wp('3%'),
-     paddingVertical: hp('0.0%'),
-     minWidth: wp('28%'),             // right column width similar to mock
-   },
-
-   priceCurrency: {
-     fontSize: wp('3.5%'),
-     fontFamily: fonts.regular400,
-     color: '#000000',
-     marginRight: wp('2%'),
-   },
-
-   priceField: {
-     paddingVertical: hp('1%'),              // remove extra height inside the box
-     fontSize: wp('3.5%'),
-     fontFamily: fonts.regular400,
-     marginVertical:0,
-     marginTop:0,
-     color: '#000000',
-   },
-   cropPillTextSelected: {
-     color: '#fff',
-   },
-   priceSection: {
-     marginTop: hp('2%'),
-     ...(isWeb && { marginTop: hp('1.5%') }),
-   },
-   priceInputRow: {
-     flex: 1,
-     marginLeft: wp('3%'),
-     ...(isWeb && { marginLeft: wp('2%') }),
-   },
-   priceLabel: {
-     marginTop: hp('-10%'),
-     fontSize: fontsizes.size16,
-     fontFamily: fonts.regular400,
-     color: '#000000',
-     ...(isWeb && { fontSize: wp('2.8%'), marginBottom: hp('1.5%') }),
-   },
-   priceInputContainer: {
-    marginBottom: hp('12%'),
-     flexDirection: 'row',
-     alignItems: 'center',
-     ...(isWeb && { marginBottom: hp('1.5%') }),
-   },
-   priceInputContainerInner: {
-     flex: 1,
-     marginLeft: 0,
-     padding: 0,
-     backgroundColor: 'transparent',
-   },
-   priceBoxInputContainer: {
-     marginLeft: 0,
-     padding: 0,
-     backgroundColor: 'transparent',
-   },
-   rentalOptionsContainer: {
-     flexDirection: 'row',
-     gap: wp('3%'),
-     marginBottom: hp('2%'),
-     ...(isWeb && { gap: wp('2%'), marginBottom: hp('1.5%') }),
-   },
-   rentalPill: {
-     backgroundColor: '#D6DBDE',
-     width: wp('43%'),
-     borderRadius: wp('3%'),
-     paddingHorizontal: wp('6%'),
-     paddingVertical: hp('1.5%'),
-     marginBottom: hp('12%'),
-     ...(isWeb && { 
-       paddingHorizontal: wp('4%'), 
-       paddingVertical: hp('1%') 
-     }),
-   },
-   rentalPillSelected: {
-     backgroundColor: '#22D883',
-   },
-   rentalPillText: {
-     fontSize: wp('3.5%'),
-     textAlign:'center',
-     fontFamily: fonts.regular400,
-     color: '#666',
-     ...(isWeb && { fontSize: wp('2.8%') }),
-   },
-   rentalPillTextSelected: {
-     color: '#fff',
-     fontFamily: fonts.bold700,
-   },
-   rentalPriceSection: {
-     marginTop: hp('2%'),
-     ...(isWeb && { marginTop: hp('1.5%') }),
-   },
-   buttonContainer: {
-     marginTop: hp('4%'),
-     marginBottom: hp('4%'),
-     ...(isWeb && { marginTop: hp('3%'), marginBottom: hp('3%') }),
-   },
-   fixedButtonContainer: {
-     position: 'absolute',
-     bottom: 0,
-     left: 0,
-     right: 0,
-     backgroundColor: '#fff',
-     paddingHorizontal: wp('5%'),
-     paddingVertical: hp('2%'),
-     borderTopWidth: 1,
-     borderTopColor: '#f0f0f0',
-     ...(isWeb && { position: 'relative', paddingHorizontal: wp('3%'), paddingVertical: hp('1.5%'), borderTopWidth: 0 }),
-   },
-   continueButton: {
-     backgroundColor: '#22D883',
-     borderRadius: wp('3%'),
-     paddingVertical: hp('3%'),
-     alignItems: 'center',
-     ...(isWeb && { paddingVertical: hp('2%') }),
-   },
-   continueButtonText: {
-     fontSize: wp('4%'),
-     fontFamily: fonts.bold700,
-     color: '#fff',
-     ...(isWeb && { fontSize: wp('3.2%') }),
-   },
-     priceInputLabel: {
-    fontSize: wp('3.5%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    marginRight: wp('2%'),
-    ...(isWeb && { fontSize: wp('2.8%'), marginRight: wp('1.5%') }),
-  },
-
- });
-
+const styles = StyleSheet.create({
+container: { flex: 1, backgroundColor: '#fff', paddingBottom: hp('20%')  },
+mainContent: { flex: 1, paddingHorizontal: wp('5%'), paddingTop: hp('3%'), paddingBottom: hp('10%') },
+title: { textAlign: 'left', fontSize: fontsizes.size24, fontFamily: fonts.bold700, marginBottom: hp('4%'), color: '#000' },
+section: { marginBottom: hp('4%') },
+sectionTitle: { fontSize: fontsizes.size18, fontFamily: fonts.bold700, color: '#000', marginBottom: hp('2%') },
+profilePhotoPlaceholder: { width: wp('30%'), height: wp('30%'), backgroundColor: '#D6DBDE', borderRadius: wp('3%'), alignItems: 'center', justifyContent: 'center', alignSelf: 'center', overflow: 'hidden' },
+profileImage: { width: '100%', height: '100%' },
+photoPlaceholderText: { fontSize: wp('8%'), color: '#999', fontFamily: fonts.bold700 },
+inputContainer: { marginBottom: hp('3%') },
+textInput: { backgroundColor: '#D6DBDE', opacity: 0.5, borderRadius: wp('2%'), paddingHorizontal: wp('3%'), paddingVertical: hp('2%'), fontSize: wp('3.5%'), color: '#000' },
+textArea: { minHeight: hp('25%'), textAlignVertical: 'top' },
+cropsListContainer: { marginBottom: hp('2%') },
+cropRow: { flexDirection: 'row', alignItems: 'center', gap: wp('3%'), marginBottom: hp('2.5%') },
+cropPill: { backgroundColor: '#D6DBDE', borderRadius: wp('7%'), paddingHorizontal: wp('5%'), paddingVertical: hp('1.3%'), minWidth: wp('22%'), alignItems: 'center' },
+cropPillSelected: { backgroundColor: '#22D883' },
+cropPillText: { fontSize: wp('3.5%'), fontFamily: fonts.regular400, color: '#666' },
+cropPillTextSelected: { color: '#fff' },
+priceHelper: { flex: 1, fontSize: wp('3.1%'), fontFamily: fonts.regular400, color: '#000' },
+priceBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E6E6E6', borderRadius: wp('3%'), paddingHorizontal: wp('3%'), minWidth: wp('28%') },
+priceCurrency: { fontSize: wp('3.5%'), fontFamily: fonts.regular400, color: '#000', marginRight: wp('2%') },
+priceField: { paddingVertical: hp('1%'), fontSize: wp('3.5%'), fontFamily: fonts.regular400, color: '#000' },
+rentalOptionsContainer: { flexDirection: 'row', gap: wp('3%'), marginBottom: hp('2%') },
+rentalPill: { backgroundColor: '#D6DBDE', flex: 1, borderRadius: wp('3%'), paddingVertical: hp('1.5%'), alignItems: 'center' },
+rentalPillSelected: { backgroundColor: '#22D883' },
+rentalPillText: { fontSize: wp('3.5%'), fontFamily: fonts.regular400, color: '#666' },
+rentalPillTextSelected: { color: '#fff', fontFamily: fonts.bold700 },
+rentalPriceSection: { marginTop: hp('2%') },
+priceLabel: { fontSize: fontsizes.size16, fontFamily: fonts.regular400, color: '#000' },
+priceInputContainer: { flexDirection: 'row', alignItems: 'center' },
+priceInputContainerInner: { flex: 1 },
+priceInputLabel: { fontSize: wp('3.5%'), fontFamily: fonts.bold700, color: '#000', marginRight: wp('2%') },
+fixedButtonContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', padding: wp('5%'), borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+inputLabel: {
+  fontSize: fontsizes.size16,
+  fontFamily: fonts.semiBold600,
+  color: '#000',
+  marginBottom: hp('1%'),
+  marginTop: hp('2%'),
+},
+pickerContainer: {
+  backgroundColor: '#D6DBDE',
+  borderRadius: wp('2%'),
+  marginBottom: hp('3%'),
+  overflow: 'hidden',
+},
+picker: {
+  width: '100%',
+  color: '#000',
+}
+});

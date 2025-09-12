@@ -3,11 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  // Image,
-  // TextInput,
-  // Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -17,16 +13,19 @@ import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 import { Header } from '../../../components/Header';
 import { InputField } from '../../../components/InputField';
 import { BottomButton } from '../../../components/BottomButton';
+import { useAuth } from '../../../context/AuthContext';
+import { supabase } from '../../../lib/supabaseClient';
+import { MaskedInputField } from '../../../components/MaskedInputField';
+import { unmask } from '../../../utils/masks';
+import { FileInputField } from '../../../components/FileInputField';
+import { uploadFileToSupabase } from '../../../services/fileUpload';
 
 export function SellerRegisterCNPJScreen() {
+  const { user, refreshUserProfile } = useAuth();
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
 
-  /* removed local Animated header values (headerHeight, logoScale, iconScale)
-     because the shared <Header /> will receive scrollY and handle shrinking */
-  
   const [formData, setFormData] = useState({
-    email: '',
     razaoSocial: '',
     cnpj: '',
     telefone: '',
@@ -43,10 +42,72 @@ export function SellerRegisterCNPJScreen() {
     }));
   };
 
-  const handleContinue = () => {
-    console.log('Continue to next CNPJ registration step');
-    // Navigate to next CNPJ registration step when created
-    navigation.navigate('SellerRegisterStore' as never);
+  const handleContinue = async () => {
+    if (!user?.id) {
+      console.log('Usuário não autenticado');
+      return;
+    }
+
+    try {
+      const currentUserId = user.id;
+
+      // Evitar duplicado de store_profile
+      const { data: exists } = await supabase
+        .from('store_profile')
+        .select('id')
+        .eq('user_id', currentUserId)
+        .limit(1)
+        .maybeSingle();
+
+      if (exists) {
+        console.log('Já existe loja cadastrada; seguindo para a próxima etapa.');
+        navigation.navigate('SellerRegisterStore' as never);
+        return;
+      }
+
+      // Upload do contrato social se houver
+      let contratoUrl: string | null = null;
+      if (formData.fotoContrato) {
+        contratoUrl = await uploadFileToSupabase(
+          formData.fotoContrato,
+          'store_profiles',
+          `contracts/${user.id}/`
+        );
+      }
+
+      const payload = {
+        user_id: currentUserId,
+        status: 'pending' as const,
+        name: formData.razaoSocial || null,
+        company_name: formData.razaoSocial || null,
+        document: unmask(formData.cnpj) || null,
+        phone: unmask(formData.telefone) || null,
+        contrato_social: contratoUrl || null,
+        legal_representative: formData.representanteLegal || null,
+        rg_legal_representative: unmask(formData.rgRepresentante) || null,
+        cpf_legal_representative: unmask(formData.cpfRepresentante) || null,
+        company_type: 'company',
+      };
+
+      const { error } = await supabase
+        .from('store_profile')
+        .insert([payload])
+        .select('id')
+        .single();
+
+      if (error) {
+        console.log('Erro ao criar loja:', error);
+        return;
+      }
+
+      // Atualizar o contexto de autenticação para refletir a mudança de tipo de usuário
+      await refreshUserProfile();
+
+      console.log('Loja criada com sucesso');
+      navigation.navigate('SellerRegisterStore' as never);
+    } catch (e) {
+      console.error('Erro ao salvar loja:', e);
+    }
   };
 
   const handleBack = () => {
@@ -55,34 +116,18 @@ export function SellerRegisterCNPJScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header: use shared Header with scrollY so it shrinks like other screens */}
       <Header scrollY={scrollY} onBack={handleBack} />
 
-      {/* Content */}
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
       >
         <View style={styles.contentContainer}>
-          {/* Title */}
           <Text style={styles.mainTitle}>Cadastro vendedor | CNPJ</Text>
 
-          {/* Form Fields */}
           <View style={styles.formContainer}>
-            <InputField
-              label="Email"
-              value={formData.email}
-              onChangeText={(value) => handleInputChange('email', value)}
-              placeholder="Digite seu email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              containerStyle={styles.inputGroup}
-              inputStyle={styles.textInput}
-              labelStyle={styles.inputLabel}
-            />
-
             <InputField
               label="Razão social"
               value={formData.razaoSocial}
@@ -94,38 +139,33 @@ export function SellerRegisterCNPJScreen() {
               labelStyle={styles.inputLabel}
             />
 
-            <InputField
+            <MaskedInputField
               label="CNPJ"
-              value={formData.cnpj}
-              onChangeText={(value) => handleInputChange('cnpj', value)}
-              placeholder="Digite o CNPJ"
-              keyboardType="numeric"
-              maxLength={18}
+              mask="cnpj"
+              rawValue={formData.cnpj}
+              onChangeRaw={(raw) => handleInputChange('cnpj', raw)}
+              placeholder="00.000.000/0000-00"
               containerStyle={styles.inputGroup}
               inputStyle={styles.textInput}
               labelStyle={styles.inputLabel}
             />
 
-            <InputField
+            <MaskedInputField
               label="Telefone celular"
-              value={formData.telefone}
-              onChangeText={(value) => handleInputChange('telefone', value)}
-              placeholder="Digite seu telefone"
-              keyboardType="phone-pad"
+              mask="phone"
+              rawValue={formData.telefone}
+              onChangeRaw={(raw) => handleInputChange('telefone', raw)}
+              placeholder="(00) 00000-0000"
               containerStyle={styles.inputGroup}
               inputStyle={styles.textInput}
               labelStyle={styles.inputLabel}
             />
 
-            <InputField
+            {/* 🔹 Troquei para FileInputField */}
+            <FileInputField
               label="Anexe foto do seu contrato social"
               value={formData.fotoContrato}
-              onChangeText={(value) => handleInputChange('fotoContrato', value)}
-              placeholder="Selecione a foto do contrato"
-              editable={false}
-              containerStyle={styles.inputGroup}
-              inputStyle={styles.uploadInput}
-              labelStyle={styles.inputLabel}
+              onChange={(uri) => handleInputChange('fotoContrato', uri)}
             />
 
             <InputField
@@ -139,24 +179,23 @@ export function SellerRegisterCNPJScreen() {
               labelStyle={styles.inputLabel}
             />
 
-            <InputField
+            <MaskedInputField
               label="RG Representante legal"
-              value={formData.rgRepresentante}
-              onChangeText={(value) => handleInputChange('rgRepresentante', value)}
-              placeholder="Digite o RG do representante"
-              keyboardType="numeric"
+              mask="rg"
+              rawValue={formData.rgRepresentante}
+              onChangeRaw={(raw) => handleInputChange('rgRepresentante', raw)}
+              placeholder="00.000.000-0"
               containerStyle={styles.inputGroup}
               inputStyle={styles.textInput}
               labelStyle={styles.inputLabel}
             />
 
-            <InputField
+            <MaskedInputField
               label="CPF Representante legal"
-              value={formData.cpfRepresentante}
-              onChangeText={(value) => handleInputChange('cpfRepresentante', value)}
-              placeholder="Digite o CPF do representante"
-              keyboardType="numeric"
-              maxLength={14}
+              mask="cpf"
+              rawValue={formData.cpfRepresentante}
+              onChangeRaw={(raw) => handleInputChange('cpfRepresentante', raw)}
+              placeholder="000.000.000-00"
               containerStyle={styles.inputGroup}
               inputStyle={styles.textInput}
               labelStyle={styles.inputLabel}
@@ -165,64 +204,43 @@ export function SellerRegisterCNPJScreen() {
         </View>
       </ScrollView>
 
-      {/* Continue Button (fixed bottom) */}
       <View style={styles.buttonContainer}>
-        <BottomButton
-          title="Continuar"
-          onPress={handleContinue}
-        />
+        <BottomButton title="Continuar" onPress={handleContinue} />
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   scrollView: {
     flex: 1,
-    ...(isWeb && {
-      marginHorizontal: wp('2%'),
-    }),
+    ...(isWeb && { marginHorizontal: wp('2%') }),
   },
   contentContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('3%'),
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('2%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('2%') }),
   },
   mainTitle: {
     fontSize: wp('6%'),
     fontFamily: fonts.bold700,
-    color: '#000000',
+    color: '#000',
     marginBottom: hp('4%'),
-    ...(isWeb && {
-      fontSize: wp('5%'),
-      marginBottom: hp('3%'),
-    }),
+    ...(isWeb && { fontSize: wp('5%'), marginBottom: hp('3%') }),
   },
-  formContainer: {
-    // Form container styles
-  },
+  formContainer: {},
   inputGroup: {
     marginBottom: hp('4%'),
-    ...(isWeb && {
-      marginBottom: hp('2%'),
-    }),
+    ...(isWeb && { marginBottom: hp('2%') }),
   },
   inputLabel: {
     fontSize: wp('4%'),
     fontFamily: fonts.bold700,
-    color: '#000000',
+    color: '#000',
     marginBottom: hp('1%'),
     marginLeft: wp('4%'),
-    ...(isWeb && {
-      fontSize: wp('3.2%'),
-    }),
+    ...(isWeb && { fontSize: wp('3.2%') }),
   },
   textInput: {
     opacity: 0.5,
@@ -232,7 +250,7 @@ const styles = StyleSheet.create({
     paddingVertical: hp('1.8%'),
     fontSize: wp('4%'),
     fontFamily: fonts.regular400,
-    color: '#000000',
+    color: '#000',
     ...(isWeb && {
       paddingHorizontal: wp('3%'),
       paddingVertical: hp('2%'),
@@ -243,34 +261,12 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: wp('4%'),
     fontFamily: fonts.regular400,
-    color: '#000000',
+    color: '#000',
     ...(isWeb && { fontSize: wp('3.2%') }),
   },
   buttonContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('3%'),
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('2%'),
-    }),
-  },
-  continueButton: {
-    backgroundColor: '#22D883',
-    borderRadius: wp('6%'),
-    paddingVertical: hp('3%'),
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...(isWeb && {
-      paddingVertical: hp('2%'),
-    }),
-  },
-  continueButtonText: {
-    color: '#fff',
-    fontSize: wp('4.5%'),
-    fontFamily: fonts.bold700,
-    ...(isWeb && {
-      fontSize: wp('3.5%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('2%') }),
   },
 });
-
