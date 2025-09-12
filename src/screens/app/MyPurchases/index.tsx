@@ -15,18 +15,21 @@ import { fonts } from '../../../constants/fonts';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
 import { SimpleHeader } from '../../../components/SimpleHeader';
 import { 
-  getStoreSales, 
-  StoreSale, 
+  getUserPurchases, 
+  UserPurchase, 
   statusLabels, 
   statusColors,
   paymentMethodLabels,
-  SalesFilters
-} from '../../../services/salesStore';
+  formatPrice,
+  formatDate,
+  getPaymentText,
+  PurchaseFilters
+} from '../../../services/userPurchaseStore';
 
-export function MySalesScreen() {
+export function MyPurchasesScreen() {
   const navigation = useNavigation();
-  const [sales, setSales] = useState<StoreSale[]>([]);
-  const [filteredSales, setFilteredSales] = useState<StoreSale[]>([]);
+  const [purchases, setPurchases] = useState<UserPurchase[]>([]);
+  const [filteredPurchases, setFilteredPurchases] = useState<UserPurchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -47,16 +50,16 @@ export function MySalesScreen() {
     { value: 'refunded', label: statusLabels.refunded },
   ];
 
-  // Buscar vendas da loja
-  const fetchSales = async (searchTerm: string = '', status: string = 'all') => {
+  // Buscar compras do usuário
+  const fetchPurchases = async (searchTerm: string = '', status: string = 'all') => {
     try {
       setLoading(true);
       
-      const filters: SalesFilters = {};
+      const filters: PurchaseFilters = {};
       
       // Aplicar filtro de status se não for "all"
       if (status !== 'all') {
-        filters.status = status;
+        filters.status = status as any;
       }
       
       // Aplicar filtro de pesquisa
@@ -64,12 +67,12 @@ export function MySalesScreen() {
         filters.searchQuery = searchTerm;
       }
 
-      const salesData = await getStoreSales(filters);
-      setSales(salesData);
-      setFilteredSales(salesData);
+      const purchasesData = await getUserPurchases(filters);
+      setPurchases(purchasesData);
+      setFilteredPurchases(purchasesData);
     } catch (error) {
-      console.error('Erro ao buscar vendas:', error);
-      Alert.alert('Erro', 'Não foi possível carregar as vendas');
+      console.error('Erro ao buscar compras:', error);
+      Alert.alert('Erro', 'Não foi possível carregar as compras');
     } finally {
       setLoading(false);
     }
@@ -84,7 +87,7 @@ export function MySalesScreen() {
 
     // Criar novo timeout
     debounceRef.current = setTimeout(() => {
-      fetchSales(query, selectedStatus);
+      fetchPurchases(query, selectedStatus);
     }, 500); // 500ms de delay
   };
 
@@ -98,24 +101,13 @@ export function MySalesScreen() {
   const handleStatusChange = (status: string) => {
     setSelectedStatus(status);
     setDropdownOpen(false);
-    fetchSales(searchQuery, status);
+    fetchPurchases(searchQuery, status);
   };
 
-  // Formatar preço
-  const formatPrice = (price: number) => {
-    return `R$ ${(price / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-  };
-
-  // Formatar data
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR');
-  };
-
-  // Buscar vendas quando a tela focar
+  // Buscar compras quando a tela focar
   useFocusEffect(
     React.useCallback(() => {
-      fetchSales(searchQuery, selectedStatus);
+      fetchPurchases(searchQuery, selectedStatus);
     }, [])
   );
 
@@ -132,11 +124,11 @@ export function MySalesScreen() {
     return (
       <SafeAreaView style={[styles.container, getWebStyles()]}>
         <View style={styles.header}>
-          <SimpleHeader title="Minhas vendas" />
+          <SimpleHeader title="Minhas compras" />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#22D883" />
-          <Text style={styles.loadingText}>Carregando vendas...</Text>
+          <Text style={styles.loadingText}>Carregando compras...</Text>
         </View>
       </SafeAreaView>
     );
@@ -145,7 +137,7 @@ export function MySalesScreen() {
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
       <View style={styles.header}>
-        <SimpleHeader title="Minhas vendas" />
+        <SimpleHeader title="Minhas compras" />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -155,7 +147,7 @@ export function MySalesScreen() {
           <View style={styles.searchContainer}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Pesquisar por ID, produto ou cliente..."
+              placeholder="Pesquisar por ID da compra ou gateway..."
               value={searchQuery}
               onChangeText={handleSearchChange}
               placeholderTextColor="#666"
@@ -194,45 +186,52 @@ export function MySalesScreen() {
             )}
           </View>
 
-          {/* Lista de vendas */}
-          {filteredSales.length === 0 ? (
+          {/* Lista de compras */}
+          {filteredPurchases.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
-                {sales.length === 0 
-                  ? 'Nenhuma venda encontrada' 
-                  : 'Nenhuma venda encontrada com os filtros aplicados'
+                {purchases.length === 0 
+                  ? 'Nenhuma compra encontrada' 
+                  : 'Nenhuma compra encontrada com os filtros aplicados'
                 }
               </Text>
-              {sales.length === 0 && (
+              {purchases.length === 0 && (
                 <Text style={styles.emptySubtext}>
-                  Suas vendas aparecerão aqui quando você receber pedidos
+                  Suas compras aparecerão aqui quando você finalizar pedidos
                 </Text>
               )}
             </View>
           ) : (
-            filteredSales.map((sale) => (
+            filteredPurchases.map((purchase) => (
               <TouchableOpacity
-                key={sale.sale_id}
+                key={purchase.purchase_id}
                 style={styles.card}
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate('SaleDetails' as never, { saleId: sale.sale_id })}
+                onPress={() => navigation.navigate('PurchaseDetails' as never, { purchaseId: purchase.purchase_id.toString() })}
               >
                 <View style={styles.cardLeft}>
                   <Text style={styles.cardTitle}>
-                    Pedido: <Text style={styles.cardTitleBold}>#{sale.sale_id}</Text>
+                    Compra: <Text style={styles.cardTitleBold}>#{purchase.purchase_id}</Text>
                   </Text>
-                  <Text style={styles.cardSubtitle}>{sale.product_name}</Text>
-                  <Text style={styles.cardDate}>Data: {formatDate(sale.sale_date)}</Text>
-                  <Text style={styles.cardAmount}>{formatPrice(sale.amount)}</Text>
+                  {purchase.gateway_order_id && (
+                    <Text style={styles.cardSubtitle}>Gateway: {purchase.gateway_order_id}</Text>
+                  )}
+                  <Text style={styles.cardDate}>Data: {formatDate(purchase.purchase_date)}</Text>
+                  <Text style={styles.cardAmount}>{formatPrice(purchase.amount)}</Text>
+                  {purchase.shipping_fee > 0 && (
+                    <Text style={styles.cardShipping}>Frete: {formatPrice(purchase.shipping_fee)}</Text>
+                  )}
+                  <Text style={styles.cardTotal}>Total: {formatPrice(purchase.total_amount)}</Text>
                   <Text style={styles.cardPayment}>
-                    {paymentMethodLabels[sale.payment_method]}
-                    {sale.installment > 1 && ` (${sale.installment}x)`}
+                    {getPaymentText(purchase)}
                   </Text>
-                  <Text style={styles.cardQuantity}>Qtd: {sale.quantity}</Text>
+                  <Text style={styles.cardQuantity}>
+                    {purchase.items_count} {purchase.items_count === 1 ? 'item' : 'itens'}
+                  </Text>
                 </View>
                 <View style={styles.cardRight}>
-                  <View style={[styles.statusPill, { backgroundColor: statusColors[sale.status] }]}>
-                    <Text style={styles.statusPillText}>{statusLabels[sale.status]}</Text>
+                  <View style={[styles.statusPill, { backgroundColor: statusColors[purchase.status] }]}>
+                    <Text style={styles.statusPillText}>{statusLabels[purchase.status]}</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -433,12 +432,12 @@ const styles = StyleSheet.create({
     color: '#111',
   },
   cardSubtitle: {
-    fontSize: wp('3.8%'),
+    fontSize: wp('3.5%'),
     fontFamily: fonts.regular400,
-    color: '#444',
+    color: '#555',
     marginBottom: hp('0.5%'),
     ...(isWeb && {
-      fontSize: wp('3.2%'),
+      fontSize: wp('2.8%'),
     }),
   },
   cardDate: {
@@ -457,6 +456,24 @@ const styles = StyleSheet.create({
     marginBottom: hp('0.3%'),
     ...(isWeb && {
       fontSize: wp('3.3%'),
+    }),
+  },
+  cardShipping: {
+    fontSize: wp('3.2%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginBottom: hp('0.3%'),
+    ...(isWeb && {
+      fontSize: wp('2.6%'),
+    }),
+  },
+  cardTotal: {
+    fontSize: wp('4.2%'),
+    fontFamily: fonts.bold700,
+    color: '#111',
+    marginBottom: hp('0.3%'),
+    ...(isWeb && {
+      fontSize: wp('3.5%'),
     }),
   },
   cardPayment: {

@@ -130,7 +130,6 @@ export function PaymentMethodScreen() {
       return;
     }
 
-    // Validar dados específicos do método de pagamento
     if (selectedPayment === 'credit_card') {
       if (!cardNumber || !cardValidity || !cardCode || !cardHolder) {
         Alert.alert('Erro', 'Por favor, preencha todos os dados do cartão.');
@@ -143,12 +142,12 @@ export function PaymentMethodScreen() {
     try {
       console.log('=== INICIANDO CRIAÇÃO DA PURCHASE E STORE SALES ===');
 
-      // Preparar dados da compra
       const purchaseData: CreatePurchaseData = {
         cart,
         shippingOption: selectedShipping,
         paymentMethod: selectedPayment as PaymentMethod,
         selectedAddress,
+        installments: selectedPayment === 'credit_card' ? selectedInstallments : undefined, // Add installments
       };
 
       console.log('Resumo da compra:');
@@ -156,10 +155,11 @@ export function PaymentMethodScreen() {
       console.log('- Frete:', formatPrice(selectedShipping.price));
       console.log('- Total geral:', formatPrice(cart.totalValue + selectedShipping.price));
       console.log('- Método de pagamento:', selectedPayment);
+      console.log('- Parcelas:', selectedPayment === 'credit_card' ? selectedInstallments : 1);
       console.log('- Endereço:', selectedAddress.address);
+      console.log('- Endereço ID:', selectedAddress.id);
       console.log('- Itens do carrinho:', cart.items.length);
 
-      // Mostrar detalhes dos itens que serão divididos por vendedor
       cart.items.forEach((item, index) => {
         console.log(`Item ${index + 1}:`, {
           produto: item.name,
@@ -179,34 +179,31 @@ export function PaymentMethodScreen() {
         console.log('Status:', purchase.status);
         console.log('Valor dos produtos:', formatPrice(purchase.amount));
         console.log('Valor do frete:', formatPrice(purchase.shipping_fee));
+        console.log('Parcelas salvas:', purchase.installment);
+        console.log('Endereço ID salvo:', purchase.address_id);
 
         if (selectedPayment === 'pix') {
-
           /* navigation.navigate('PixPayment' as never, {
             purchaseId: purchase.id,
             amount: purchase.amount + purchase.shipping_fee
-          });
+          }); */
         } else if (selectedPayment === 'boleto') {
-          navigation.navigate('BoletoPayment' as never, {
+          /* navigation.navigate('BoletoPayment' as never, {
             purchaseId: purchase.id,
             amount: purchase.amount + purchase.shipping_fee
-          });
+          }); */
         } else if (selectedPayment === 'credit_card') {
-          navigation.navigate('CreditCardPayment' as never, {
+          /* navigation.navigate('CreditCardPayment' as never, {
             purchaseId: purchase.id,
             amount: purchase.amount + purchase.shipping_fee,
             installments: selectedInstallments
           }); */
         } else {
           // Fallback para tela genérica
-/*           navigation.navigate('OrderSuccess' as never, {
+          /* navigation.navigate('OrderSuccess' as never, {
             purchaseId: purchase.id
           }); */
         }
-
-
-
-
       } else {
         Alert.alert('Erro', 'Não foi possível criar o pedido. Tente novamente.');
       }

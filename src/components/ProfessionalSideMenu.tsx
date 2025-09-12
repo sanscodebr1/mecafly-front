@@ -151,6 +151,15 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
               <Text style={styles.menuOptionText}>Meus Endereços</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => navigation.navigate('MyPurchases' as never)}
+            >
+              <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
+              <Text style={styles.menuOptionText}>Minhas compras</Text>
+            </TouchableOpacity>
+
+
             {/*     <TouchableOpacity
       style={styles.menuOption}
       onPress={() => navigation.navigate('MyContracts' as never)}
