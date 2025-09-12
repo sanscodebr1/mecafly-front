@@ -59,6 +59,9 @@ import  ProductQuestionsList  from "../screens/app/ProductQuestions";
 import { SellerQuestionsListScreen } from "../screens/app/SellerQuestionsListScreen";
 import { AddProductShippingScreen } from "../screens/app/AddProductShipping";
 import { UserAddress } from '../services/userAddress';
+import { MyPurchasesScreen } from "../screens/app/MyPurchases";
+import { PurchaseDetailScreen } from "../screens/app/PurchaseDetails";
+
 
 
 
@@ -119,6 +122,8 @@ export type RootStackParamList = {
   Documents: undefined;
   Login: undefined;
   AddProductShippingScreen: undefined;
+  MyPurchasesScreen: undefined;
+  PurchaseDetailScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -190,6 +195,8 @@ return(
             <Stack.Screen name= "EditAddress" component={EditAddressScreen}/> 
             <Stack.Screen name="SellerQuestionsListScreen" component={SellerQuestionsListScreen}/>
             <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen} />
+            <Stack.Screen name="MyPurchases" component={MyPurchasesScreen} />
+            <Stack.Screen name="PurchaseDetails" component={PurchaseDetailScreen} />
 
         </Stack.Navigator>
 

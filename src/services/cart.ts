@@ -28,7 +28,7 @@ const formatPrice = (price: number) => {
   return `R$ ${(price / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 };
 
-// Buscar todos os itens do carrinho do usuário
+// Buscar todos os itens do carrinho do usuário (APENAS itens não processados - purchase_id = null)
 export async function getUserCart(): Promise<CartSummary> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -42,6 +42,7 @@ export async function getUserCart(): Promise<CartSummary> {
       .from('vw_cart_detail')
       .select('*')
       .eq('user_id', user.id)
+      .is('purchase_id', null) // ★ FILTRO PRINCIPAL: Só buscar itens não processados
       .order('added_at', { ascending: false });
 
     if (error) {
@@ -53,19 +54,12 @@ export async function getUserCart(): Promise<CartSummary> {
       return { items: [], totalItems: 0, totalValue: 0, totalValueFormatted: 'R$ 0,00' };
     }
 
-    console.log('Raw cart data from DB:', data); // Debug log
+    console.log('Carrinho ativo (purchase_id = null):', data.length, 'itens');
 
     const items: CartItem[] = data.map(item => {
       const storeId = item.store_id ? item.store_id.toString() : null;
       const storeUserId = item.store_user_id || null;
       
-      console.log(`Item ${item.product_name}:`, {
-        store_id_raw: item.store_id,
-        store_id_processed: storeId,
-        store_user_id: storeUserId,
-        store_name: item.store_name || item.company_name
-      });
-
       return {
         id: item.cart_id.toString(),
         name: item.product_name,
@@ -107,14 +101,17 @@ export async function addToCart(productId: string, quantity: number = 1): Promis
       return false;
     }
 
+    // Verificar se já existe item deste produto no carrinho que NÃO foi processado
     const { data: existingItem } = await supabase
       .from('cart')
       .select('id, quantity')
       .eq('user_id', user.id)
       .eq('product_id', parseInt(productId))
+      .is('purchase_id', null) // ★ Só considerar itens não processados
       .single();
 
     if (existingItem) {
+      // Atualizar quantidade do item existente
       const { error } = await supabase
         .from('cart')
         .update({ quantity: existingItem.quantity + quantity })
@@ -125,12 +122,14 @@ export async function addToCart(productId: string, quantity: number = 1): Promis
         return false;
       }
     } else {
+      // Criar novo item no carrinho
       const { error } = await supabase
         .from('cart')
         .insert({
           user_id: user.id,
           product_id: parseInt(productId),
-          quantity
+          quantity,
+          purchase_id: null // ★ Explicitamente definir como null para novos itens
         });
 
       if (error) {
@@ -163,7 +162,8 @@ export async function updateCartItemQuantity(cartItemId: string, quantity: numbe
       .from('cart')
       .update({ quantity })
       .eq('id', parseInt(cartItemId))
-      .eq('user_id', user.id); 
+      .eq('user_id', user.id)
+      .is('purchase_id', null); // ★ Só permitir atualizar itens não processados
 
     if (error) {
       console.error('Erro ao atualizar quantidade:', error);
@@ -190,7 +190,8 @@ export async function removeFromCart(cartItemId: string): Promise<boolean> {
       .from('cart')
       .delete()
       .eq('id', parseInt(cartItemId))
-      .eq('user_id', user.id); // Garantir que só pode deletar próprios itens
+      .eq('user_id', user.id)
+      .is('purchase_id', null); // ★ Só permitir remover itens não processados
 
     if (error) {
       console.error('Erro ao remover do carrinho:', error);
@@ -216,7 +217,8 @@ export async function clearCart(): Promise<boolean> {
     const { error } = await supabase
       .from('cart')
       .delete()
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .is('purchase_id', null); // ★ Só limpar itens não processados
 
     if (error) {
       console.error('Erro ao limpar carrinho:', error);
@@ -243,6 +245,7 @@ export async function isProductInCart(productId: string): Promise<{ inCart: bool
       .select('quantity')
       .eq('user_id', user.id)
       .eq('product_id', parseInt(productId))
+      .is('purchase_id', null) // ★ Só verificar itens não processados
       .single();
 
     if (error) {
@@ -267,7 +270,8 @@ export async function getCartItemCount(): Promise<number> {
     const { data, error } = await supabase
       .from('cart')
       .select('quantity')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .is('purchase_id', null); // ★ Só contar itens não processados
 
     if (error) {
       console.error('Erro ao contar itens do carrinho:', error);
@@ -310,4 +314,36 @@ export async function validateCart(): Promise<{ valid: boolean; issues: string[]
 
 export async function syncCart(): Promise<CartSummary> {
   return await getUserCart();
+}
+
+// ★ NOVA FUNÇÃO: Marcar itens do carrinho como processados
+export async function markCartItemsAsProcessed(purchaseId: number): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('Usuário não autenticado');
+      return false;
+    }
+
+    // Atualizar todos os itens do carrinho do usuário que ainda não foram processados
+    const { data: updatedItems, error } = await supabase
+      .from('cart')
+      .update({ purchase_id: purchaseId })
+      .eq('user_id', user.id)
+      .is('purchase_id', null) // Só atualizar itens que ainda não foram processados
+      .select('id');
+
+    if (error) {
+      console.error('Erro ao marcar itens do carrinho como processados:', error);
+      return false;
+    }
+
+    const itemCount = updatedItems?.length || 0;
+    console.log(`✅ ${itemCount} itens do carrinho marcados como processados com purchase_id: ${purchaseId}`);
+    return true;
+  } catch (error) {
+    console.error('Erro ao marcar itens do carrinho como processados:', error);
+    return false;
+  }
 }

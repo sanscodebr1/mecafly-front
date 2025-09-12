@@ -1,6 +1,6 @@
 // services/purchaseService.ts
 import { supabase } from '../lib/supabaseClient';
-import { CartSummary } from './cart';
+import { CartSummary, markCartItemsAsProcessed } from './cart';
 import { ShippingOption } from './shippingService';
 import { UserAddress } from './userAddress';
 
@@ -22,6 +22,7 @@ export interface CreatePurchaseData {
   shippingOption: ShippingOption;
   paymentMethod: PaymentMethod;
   selectedAddress: UserAddress;
+  installments?: number; 
 }
 
 export interface Purchase {
@@ -33,6 +34,8 @@ export interface Purchase {
   status: SaleStatus;
   shipping_fee: number;
   payment_method: PaymentMethod;
+  address_id?: number;
+  installment?: number;
 }
 
 export interface StoreSale {
@@ -45,9 +48,11 @@ export interface StoreSale {
   status: SaleStatus;
   quantity: number;
   payment_method: PaymentMethod;
+  installment?: number;
+  customer_address?: number;
+  purchase_id?: number;
 }
 
-// Função para criar uma nova compra com vendas por loja
 export async function createPurchase(purchaseData: CreatePurchaseData): Promise<Purchase | null> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -57,24 +62,34 @@ export async function createPurchase(purchaseData: CreatePurchaseData): Promise<
       return null;
     }
 
-    const { cart, shippingOption, paymentMethod } = purchaseData;
+    const { cart, shippingOption, paymentMethod, selectedAddress, installments } = purchaseData;
 
-    // Calcular o valor total apenas dos produtos (sem frete)
-    const productsTotal = cart.totalValue; // em centavos
+    // Verificar se o carrinho está vazio (só considera itens com purchase_id null)
+    if (cart.items.length === 0) {
+      console.error('Carrinho está vazio ou todos os itens já foram processados');
+      return null;
+    }
+
+    const productsTotal = cart.totalValue; 
 
     console.log('=== INICIANDO CRIAÇÃO DA PURCHASE ===');
     console.log('Total dos produtos:', productsTotal);
     console.log('Valor do frete:', shippingOption.price);
-    console.log('Itens do carrinho:', cart.items);
+    console.log('Método de pagamento:', paymentMethod);
+    console.log('Parcelas:', installments);
+    console.log('Endereço ID:', selectedAddress.id);
+    console.log('Itens do carrinho (ativos):', cart.items.length);
 
-    // Criar a purchase principal (apenas produtos, sem frete)
+    // STEP 1: Criar a purchase principal primeiro
     const purchaseRecord = {
       customer_id: user.id,
       gateway_order_id: null,
-      amount: productsTotal, // Total apenas dos produtos em centavos
+      amount: productsTotal, 
       status: 'waiting_payment' as SaleStatus,
-      shipping_fee: shippingOption.price, // Frete em centavos
+      shipping_fee: shippingOption.price, 
       payment_method: paymentMethod,
+      address_id: selectedAddress.id, 
+      installment: paymentMethod === 'credit_card' ? installments || 1 : null, 
     };
 
     console.log('Dados da purchase:', purchaseRecord);
@@ -91,9 +106,19 @@ export async function createPurchase(purchaseData: CreatePurchaseData): Promise<
       return null;
     }
 
-    console.log('Purchase criada:', purchase);
+    console.log('✅ Purchase criada com ID:', purchase.id);
 
-    // Criar store_sales para cada item do carrinho
+    // STEP 2: Marcar itens do carrinho como processados ANTES de criar store_sales
+    const cartUpdateSuccess = await markCartItemsAsProcessed(purchase.id);
+    
+    if (!cartUpdateSuccess) {
+      console.error('Erro ao marcar itens do carrinho como processados');
+      // Tentar reverter a purchase criada
+      await supabase.from('purchase').delete().eq('id', purchase.id);
+      return null;
+    }
+
+    // STEP 3: Criar store_sales vinculadas à purchase criada
     const storeSalesPromises = cart.items.map(async (item) => {
       // Calcular valor total do item (preço unitário * quantidade)
       const itemTotalAmount = parseFloat(item.price.replace('R$ ', '').replace(',', '.')) * 100 * item.quantity;
@@ -108,16 +133,19 @@ export async function createPurchase(purchaseData: CreatePurchaseData): Promise<
       });
       
       const storeSaleRecord = {
-        store_id: storeUserId, // UUID do usuário da loja (já vem da view)
+        store_id: storeUserId,
         customer_id: user.id,
         product_id: parseInt(item.productId),
-        amount: itemTotalAmount, // Valor bruto total do item em centavos
+        amount: itemTotalAmount,
         status: 'waiting_payment' as SaleStatus,
         quantity: item.quantity,
         payment_method: paymentMethod,
+        installment: paymentMethod === 'credit_card' ? installments || 1 : null,
+        customer_address: selectedAddress.id,
+        purchase_id: purchase.id, // Vincular à purchase criada
       };
 
-      console.log(`Criando store_sale para produto ${item.name}:`, storeSaleRecord);
+      console.log(`Criando store_sale para produto ${item.name} vinculada à purchase ${purchase.id}:`, storeSaleRecord);
 
       const { data: storeSale, error: storeSaleError } = await supabase
         .from('store_sale')
@@ -130,7 +158,7 @@ export async function createPurchase(purchaseData: CreatePurchaseData): Promise<
         return null;
       }
 
-      console.log('Store sale criada:', storeSale);
+      console.log('✅ Store sale criada com ID:', storeSale.id, '-> vinculada à purchase:', storeSale.purchase_id);
       return storeSale;
     });
 
@@ -141,11 +169,17 @@ export async function createPurchase(purchaseData: CreatePurchaseData): Promise<
     const failedSales = storeSales.filter(sale => sale === null);
     if (failedSales.length > 0) {
       console.error(`${failedSales.length} store_sales falharam ao ser criadas`);
-      // Você pode decidir se quer reverter a purchase ou continuar
+      // Opcional: implementar rollback completo aqui se necessário
     }
 
     const successfulSales = storeSales.filter(sale => sale !== null);
-    console.log(`Purchase criada com ${successfulSales.length} store_sales associadas`);
+    console.log(`=== PURCHASE ${purchase.id} CRIADA COM SUCESSO ===`);
+    console.log(`- Purchase ID: ${purchase.id}`);
+    console.log(`- Store sales criadas: ${successfulSales.length}/${cart.items.length}`);
+    console.log(`- Parcelas: ${installments || 1}`);
+    console.log(`- Endereço ID: ${selectedAddress.id}`);
+    console.log(`- Valor total: R$ ${(purchase.amount + purchase.shipping_fee) / 100}`);
+    console.log(`- Itens do carrinho marcados como processados: ✅`);
 
     return purchase as Purchase;
 
@@ -155,7 +189,6 @@ export async function createPurchase(purchaseData: CreatePurchaseData): Promise<
   }
 }
 
-// Função para buscar uma compra por ID
 export async function getPurchaseById(purchaseId: number): Promise<Purchase | null> {
   try {
     const { data, error } = await supabase
@@ -176,7 +209,6 @@ export async function getPurchaseById(purchaseId: number): Promise<Purchase | nu
   }
 }
 
-// Função para buscar compras do usuário
 export async function getUserPurchases(): Promise<Purchase[]> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -204,7 +236,6 @@ export async function getUserPurchases(): Promise<Purchase[]> {
   }
 }
 
-// Função para buscar vendas da loja (store_sales)
 export async function getStoreSales(): Promise<StoreSale[]> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -232,45 +263,6 @@ export async function getStoreSales(): Promise<StoreSale[]> {
   }
 }
 
-// Função para buscar vendas da loja com detalhes do produto
-export async function getStoreSalesWithDetails(): Promise<any[]> {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      console.error('Usuário não autenticado');
-      return [];
-    }
-
-    const { data, error } = await supabase
-      .from('store_sale')
-      .select(`
-        *,
-        product:product_id (
-          name,
-          description,
-          price
-        ),
-        customer:customer_id (
-          email
-        )
-      `)
-      .eq('store_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao buscar vendas com detalhes:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('Erro inesperado ao buscar vendas com detalhes:', error);
-    return [];
-  }
-}
-
-// Função para atualizar status de uma compra e suas store_sales
 export async function updatePurchaseStatus(purchaseId: number, status: SaleStatus): Promise<boolean> {
   try {
     // Atualizar a purchase
@@ -284,31 +276,15 @@ export async function updatePurchaseStatus(purchaseId: number, status: SaleStatu
       return false;
     }
 
-    // Buscar e atualizar todas as store_sales relacionadas
-    // Nota: Como não temos relação direta, precisamos atualizar baseado no timing ou criar uma tabela de relacionamento
-    // Por enquanto, vamos atualizar as store_sales do mesmo cliente no mesmo período
-    const { data: purchase } = await supabase
-      .from('purchase')
-      .select('customer_id, created_at')
-      .eq('id', purchaseId)
-      .single();
+    // Atualizar todas as store_sales relacionadas usando purchase_id
+    const { error: storeSalesError } = await supabase
+      .from('store_sale')
+      .update({ status })
+      .eq('purchase_id', purchaseId);
 
-    if (purchase) {
-      // Atualizar store_sales criadas no mesmo minuto (aproximadamente)
-      const createdAt = new Date(purchase.created_at);
-      const startTime = new Date(createdAt.getTime() - 60000); // 1 minuto antes
-      const endTime = new Date(createdAt.getTime() + 60000); // 1 minuto depois
-
-      const { error: storeSalesError } = await supabase
-        .from('store_sale')
-        .update({ status })
-        .eq('customer_id', purchase.customer_id)
-        .gte('created_at', startTime.toISOString())
-        .lte('created_at', endTime.toISOString());
-
-      if (storeSalesError) {
-        console.error('Erro ao atualizar status das store_sales:', storeSalesError);
-      }
+    if (storeSalesError) {
+      console.error('Erro ao atualizar status das store_sales:', storeSalesError);
+      return false;
     }
 
     console.log(`Status da purchase ${purchaseId} e store_sales relacionadas atualizado para: ${status}`);
@@ -319,7 +295,6 @@ export async function updatePurchaseStatus(purchaseId: number, status: SaleStatu
   }
 }
 
-// Função para atualizar gateway_order_id após integração com pagamento
 export async function updatePurchaseGatewayOrderId(purchaseId: number, gatewayOrderId: string): Promise<boolean> {
   try {
     const { error } = await supabase
@@ -340,67 +315,100 @@ export async function updatePurchaseGatewayOrderId(purchaseId: number, gatewayOr
   }
 }
 
-// Função para buscar estatísticas de vendas da loja
-export async function getStoreSalesStatistics(): Promise<{
-  totalSales: number;
-  totalRevenue: number;
-  salesByStatus: Record<SaleStatus, number>;
-  salesByMonth: Record<string, number>;
+export async function getStoreSalesByPurchaseId(purchaseId: number): Promise<StoreSale[]> {
+  try {
+    const { data, error } = await supabase
+      .from('store_sale')
+      .select('*')
+      .eq('purchase_id', purchaseId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Erro ao buscar store sales por purchase ID:', error);
+      return [];
+    }
+
+    return data as StoreSale[];
+  } catch (error) {
+    console.error('Erro inesperado ao buscar store sales:', error);
+    return [];
+  }
+}
+
+export async function getPurchaseWithStoreSales(purchaseId: number): Promise<{
+  purchase: Purchase | null;
+  storeSales: StoreSale[];
 }> {
+  try {
+    const [purchase, storeSales] = await Promise.all([
+      getPurchaseById(purchaseId),
+      getStoreSalesByPurchaseId(purchaseId)
+    ]);
+
+    return {
+      purchase,
+      storeSales
+    };
+  } catch (error) {
+    console.error('Erro ao buscar purchase com store sales:', error);
+    return {
+      purchase: null,
+      storeSales: []
+    };
+  }
+}
+
+// ★ NOVA FUNÇÃO: Buscar histórico de compras do usuário com itens do carrinho
+export async function getUserPurchaseHistory(): Promise<Array<Purchase & { cartItems: any[] }>> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
-      return {
-        totalSales: 0,
-        totalRevenue: 0,
-        salesByStatus: {} as Record<SaleStatus, number>,
-        salesByMonth: {},
-      };
+      console.error('Usuário não autenticado');
+      return [];
     }
 
-    const { data: sales, error } = await supabase
-      .from('store_sale')
-      .select('amount, status, created_at')
-      .eq('store_id', user.id);
+    // Buscar purchases do usuário
+    const { data: purchases, error: purchaseError } = await supabase
+      .from('purchase')
+      .select('*')
+      .eq('customer_id', user.id)
+      .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Erro ao buscar estatísticas:', error);
-      return {
-        totalSales: 0,
-        totalRevenue: 0,
-        salesByStatus: {} as Record<SaleStatus, number>,
-        salesByMonth: {},
-      };
+    if (purchaseError) {
+      console.error('Erro ao buscar histórico de purchases:', purchaseError);
+      return [];
     }
 
-    const totalSales = sales?.length || 0;
-    const totalRevenue = sales?.reduce((sum, sale) => sum + sale.amount, 0) || 0;
+    if (!purchases || purchases.length === 0) {
+      return [];
+    }
 
-    const salesByStatus = sales?.reduce((acc, sale) => {
-      acc[sale.status] = (acc[sale.status] || 0) + 1;
-      return acc;
-    }, {} as Record<SaleStatus, number>) || {};
+    // Para cada purchase, buscar os itens do carrinho relacionados
+    const purchasesWithItems = await Promise.all(
+      purchases.map(async (purchase) => {
+        const { data: cartItems, error: cartError } = await supabase
+          .from('vw_cart_detail')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('purchase_id', purchase.id)
+          .order('added_at', { ascending: false });
 
-    const salesByMonth = sales?.reduce((acc, sale) => {
-      const month = new Date(sale.created_at).toISOString().substring(0, 7); // YYYY-MM
-      acc[month] = (acc[month] || 0) + sale.amount;
-      return acc;
-    }, {} as Record<string, number>) || {};
+        if (cartError) {
+          console.error(`Erro ao buscar itens da purchase ${purchase.id}:`, cartError);
+          return { ...purchase, cartItems: [] };
+        }
 
-    return {
-      totalSales,
-      totalRevenue,
-      salesByStatus,
-      salesByMonth,
-    };
+        return {
+          ...purchase,
+          cartItems: cartItems || []
+        };
+      })
+    );
+
+    return purchasesWithItems;
   } catch (error) {
-    console.error('Erro inesperado ao buscar estatísticas:', error);
-    return {
-      totalSales: 0,
-      totalRevenue: 0,
-      salesByStatus: {} as Record<SaleStatus, number>,
-      salesByMonth: {},
-    };
+    console.error('Erro ao buscar histórico de compras:', error);
+    return [];
   }
 }
