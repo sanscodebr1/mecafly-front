@@ -55,9 +55,10 @@ import { OrderDetailScreen } from "../screens/app/OrderDetails";
 import { DocumentsScreen } from "../screens/app/Documents";
 import { LoginScreen } from "../screens/app/Login";
 import ProfessionalDocuments from "../screens/app/Professional/ProfessionalDocuments";
-import  ProductQuestionsList  from "../screens/app/ProductQuestions";
+import ProductQuestionsList from "../screens/app/ProductQuestions";
 import { SellerQuestionsListScreen } from "../screens/app/SellerQuestionsListScreen";
 import { AddProductShippingScreen } from "../screens/app/AddProductShipping";
+import { PaymentGatewayRegistrationScreen } from "../screens/app/PaymentGatewayRegistration";
 import { UserAddress } from '../services/userAddress';
 
 
@@ -66,133 +67,140 @@ import { UserAddress } from '../services/userAddress';
 enableScreens();
 
 export type RootStackParamList = {
-  Home: undefined;
-  Drones: undefined;
-  ProductDetail: undefined;
-  Cart: undefined;
-  Checkout: undefined;
-  PersonalInfo: undefined;
-  DeliveryAddress: undefined;
-  DeliveryMethod: { selectedAddress: UserAddress };
-  PaymentMethod: undefined;
-  PaymentMethodProfessional: undefined;
-  Profissionais: undefined;
-  MyProfiles: undefined;
-  MyAddresses: undefined;
-  NewAddress: undefined;
-  ChangePassword: undefined;
-  SellerArea: undefined;
-  MyProducts: undefined;
-  AddProduct: undefined;
-  AddProductDetails: undefined;
-  AddProductImages: undefined;
-  AddProductPrice: undefined;
-  AddProductSummary: undefined;
-  AdPending: undefined;
-  MySales: undefined;
-  SaleDetails: undefined;
-  Profile: undefined;
-  Questions: undefined;
-  QuestionAnswer: undefined;
-  ProfessionalDetail: undefined;
-  ProfessionalSchedule: undefined;
-  ProfessionalSummary: undefined;
-  Address: undefined;
-  PixPayment: undefined;
-  MyContracts: undefined;
-  ProfessionalRegistration: undefined;
-  ProfessionalProfile: undefined;
-  RegistrationAnalysis: undefined;
-  ProfessionalArea: undefined;
-  MyAppointments: undefined;
-  History: undefined;
-  SellerRegister: undefined;
-  SellerRegisterCPF: undefined;
-  SellerRegisterCNPJ: undefined;
-  SellerRegisterStore: undefined;
-  MyProductsFilled: undefined;
-  EditProduct: undefined;
-  EditAddressScreen: undefined;
-  DeactivateProductSuccess: undefined;
-  MyOrders: undefined;
-  OrderDetails: undefined;
-  Documents: undefined;
-  Login: undefined;
-  AddProductShippingScreen: undefined;
+    Home: undefined;
+    Drones: undefined;
+    ProductDetail: undefined;
+    Cart: undefined;
+    Checkout: undefined;
+    PersonalInfo: undefined;
+    DeliveryAddress: undefined;
+    DeliveryMethod: { selectedAddress: UserAddress };
+    PaymentMethod: undefined;
+    PaymentMethodProfessional: undefined;
+    Profissionais: undefined;
+    MyProfiles: undefined;
+    MyAddresses: undefined;
+    NewAddress: undefined;
+    ChangePassword: undefined;
+    SellerArea: undefined;
+    MyProducts: undefined;
+    AddProduct: undefined;
+    AddProductDetails: undefined;
+    AddProductImages: undefined;
+    AddProductPrice: undefined;
+    AddProductSummary: undefined;
+    AdPending: undefined;
+    MySales: undefined;
+    SaleDetails: undefined;
+    Profile: undefined;
+    Questions: undefined;
+    QuestionAnswer: undefined;
+    ProfessionalDetail: undefined;
+    ProfessionalSchedule: undefined;
+    ProfessionalSummary: undefined;
+    Address: undefined;
+    PixPayment: undefined;
+    MyContracts: undefined;
+    ProfessionalRegistration: undefined;
+    ProfessionalProfile: undefined;
+    RegistrationAnalysis: undefined;
+    ProfessionalArea: undefined;
+    MyAppointments: undefined;
+    History: undefined;
+    SellerRegister: undefined;
+    SellerRegisterCPF: undefined;
+    SellerRegisterCNPJ: undefined;
+    SellerRegisterStore: undefined;
+    MyProductsFilled: undefined;
+    EditProduct: undefined;
+    EditAddressScreen: undefined;
+    DeactivateProductSuccess: undefined;
+    MyOrders: undefined;
+    OrderDetails: undefined;
+    Documents: undefined;
+    Login: undefined;
+    AddProductShippingScreen: undefined;
+    PaymentGatewayRegistration: undefined;
+    ProfessionalDocuments: undefined;
+    ProductQuestions: undefined;
+    EditAddress: undefined;
+    SellerQuestionsListScreen: undefined;
+    AddProductShipping: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export function Routes(){
-return(
-    <NavigationContainer>
-        <Stack.Navigator
-        initialRouteName='Home'
-        screenOptions={{
-            headerShown: false,
-            contentStyle: {backgroundColor:'#fff'}
-        }}
-        >
+export function Routes() {
+    return (
+        <NavigationContainer>
+            <Stack.Navigator
+                initialRouteName='Home'
+                screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: '#fff' }
+                }}
+            >
 
-            <Stack.Screen name="Home" component={HomeScreen}/>
-            <Stack.Screen name="Drones" component={DronesScreen}/>
-            <Stack.Screen name="ProductDetail" component={ProductDetailScreen}/>
-            <Stack.Screen name="Cart" component={CartScreen}/>
-            <Stack.Screen name="Checkout" component={CheckoutScreen}/>
-            <Stack.Screen name="PersonalInfo" component={PersonalInfoScreen}/>
-            <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen}/>
-            <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen}/>
-            <Stack.Screen name="PaymentMethodProfessional" component={PaymentMethodProfessionalScreen}/>
-            <Stack.Screen name="Profissionais" component={ProfissionaisScreen}/>
-            <Stack.Screen name="MyProfiles" component={MyProfilesScreen}/>
-            <Stack.Screen name="MyAddresses" component={MyAddressesScreen}/>
-            <Stack.Screen name="NewAddress" component={NewAddressScreen}/>
-            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen}/>
-            <Stack.Screen name="SellerArea" component={SellerAreaScreen}/>
-            <Stack.Screen name="MyProducts" component={MyProductsScreen}/>
-            <Stack.Screen name="MyProductsFilled" component={MyProductsFilledScreen}/>
-            <Stack.Screen name="AddProduct" component={AddProductScreen}/>
-            <Stack.Screen name="AddProductDetails" component={AddProductDetailsScreen}/>
-            <Stack.Screen name="AddProductImages" component={AddProductImagesScreen}/>
-            <Stack.Screen name="AddProductPrice" component={AddProductPriceScreen}/>
-            <Stack.Screen name="AddProductSummary" component={AddProductSummaryScreen}/>
-            <Stack.Screen name="AdPending" component={AdPendingScreen}/>
-            <Stack.Screen name="MySales" component={MySalesScreen}/>
-            <Stack.Screen name="SaleDetails" component={SaleDetailScreen}/>
-            <Stack.Screen name="Profile" component={ProfileScreen}/>
-            <Stack.Screen name="Questions" component={QuestionsScreen}/>
-            <Stack.Screen name="QuestionAnswer" component={QuestionsAnswerScreen}/>
-            <Stack.Screen name="ProfessionalDetail" component={ProfessionalDetailScreen}/>
-            <Stack.Screen name="ProfessionalSchedule" component={ProfessionalScheduleScreen}/>
-            <Stack.Screen name="ProfessionalSummary" component={ProfessionalSummaryScreen}/>
-            <Stack.Screen name="Address" component={AddressScreen}/>
-            <Stack.Screen name="PixPayment" component={PixPaymentScreen}/>
-            <Stack.Screen name="MyContracts" component={MyContractsScreen}/>
-            <Stack.Screen name="ProfessionalRegistration" component={ProfessionalRegistrationScreen}/>
-            <Stack.Screen name="ProfessionalProfile" component={ProfessionalProfileScreen}/>
-            <Stack.Screen name="RegistrationAnalysis" component={RegistrationAnalysisScreen}/>
-            <Stack.Screen name="ProfessionalArea" component={ProfessionalAreaScreen}/>
-            <Stack.Screen name="MyAppointments" component={MyAppointmentsScreen}/>
-            <Stack.Screen name="History" component={HistoryScreen}/>
-            <Stack.Screen name="SellerRegister" component={SellerRegisterScreen}/>
-            <Stack.Screen name="SellerRegisterCPF" component={SellerRegisterCPFScreen}/>
-            <Stack.Screen name="SellerRegisterCNPJ" component={SellerRegisterCNPJScreen}/>
-            <Stack.Screen name="SellerRegisterStore" component={SellerRegisterStoreScreen}/>
-            <Stack.Screen name="DeliveryMethod" component={DeliveryMethodScreen}/>
-            <Stack.Screen name="EditProduct" component={EditProductScreen}/>
-            <Stack.Screen name="DeactivateProductSuccess" component={DeactivateProductSuccessScreen} options={{ title: 'Desativar Produto' }}/>
-            <Stack.Screen name="MyOrders" component={MyOrdersScreen}/>
-            <Stack.Screen name="OrderDetails" component={OrderDetailScreen}/>
-            <Stack.Screen name="Documents" component={DocumentsScreen}/>
-            <Stack.Screen name="Login" component={LoginScreen}/>
-            <Stack.Screen name="ProductQuestions" component={ProductQuestionsList}/>
-            <Stack.Screen name="ProfessionalDocuments" component={ProfessionalDocuments}/>
-            <Stack.Screen name= "EditAddress" component={EditAddressScreen}/> 
-            <Stack.Screen name="SellerQuestionsListScreen" component={SellerQuestionsListScreen}/>
-            <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen} />
+                <Stack.Screen name="Home" component={HomeScreen} />
+                <Stack.Screen name="Drones" component={DronesScreen} />
+                <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
+                <Stack.Screen name="Cart" component={CartScreen} />
+                <Stack.Screen name="Checkout" component={CheckoutScreen} />
+                <Stack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
+                <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen} />
+                <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />
+                <Stack.Screen name="PaymentMethodProfessional" component={PaymentMethodProfessionalScreen} />
+                <Stack.Screen name="Profissionais" component={ProfissionaisScreen} />
+                <Stack.Screen name="MyProfiles" component={MyProfilesScreen} />
+                <Stack.Screen name="MyAddresses" component={MyAddressesScreen} />
+                <Stack.Screen name="NewAddress" component={NewAddressScreen} />
+                <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+                <Stack.Screen name="SellerArea" component={SellerAreaScreen} />
+                <Stack.Screen name="MyProducts" component={MyProductsScreen} />
+                <Stack.Screen name="MyProductsFilled" component={MyProductsFilledScreen} />
+                <Stack.Screen name="AddProduct" component={AddProductScreen} />
+                <Stack.Screen name="AddProductDetails" component={AddProductDetailsScreen} />
+                <Stack.Screen name="AddProductImages" component={AddProductImagesScreen} />
+                <Stack.Screen name="AddProductPrice" component={AddProductPriceScreen} />
+                <Stack.Screen name="AddProductSummary" component={AddProductSummaryScreen} />
+                <Stack.Screen name="AdPending" component={AdPendingScreen} />
+                <Stack.Screen name="MySales" component={MySalesScreen} />
+                <Stack.Screen name="SaleDetails" component={SaleDetailScreen} />
+                <Stack.Screen name="Profile" component={ProfileScreen} />
+                <Stack.Screen name="Questions" component={QuestionsScreen} />
+                <Stack.Screen name="QuestionAnswer" component={QuestionsAnswerScreen} />
+                <Stack.Screen name="ProfessionalDetail" component={ProfessionalDetailScreen} />
+                <Stack.Screen name="ProfessionalSchedule" component={ProfessionalScheduleScreen} />
+                <Stack.Screen name="ProfessionalSummary" component={ProfessionalSummaryScreen} />
+                <Stack.Screen name="Address" component={AddressScreen} />
+                <Stack.Screen name="PixPayment" component={PixPaymentScreen} />
+                <Stack.Screen name="MyContracts" component={MyContractsScreen} />
+                <Stack.Screen name="ProfessionalRegistration" component={ProfessionalRegistrationScreen} />
+                <Stack.Screen name="ProfessionalProfile" component={ProfessionalProfileScreen} />
+                <Stack.Screen name="RegistrationAnalysis" component={RegistrationAnalysisScreen} />
+                <Stack.Screen name="ProfessionalArea" component={ProfessionalAreaScreen} />
+                <Stack.Screen name="MyAppointments" component={MyAppointmentsScreen} />
+                <Stack.Screen name="History" component={HistoryScreen} />
+                <Stack.Screen name="SellerRegister" component={SellerRegisterScreen} />
+                <Stack.Screen name="SellerRegisterCPF" component={SellerRegisterCPFScreen} />
+                <Stack.Screen name="SellerRegisterCNPJ" component={SellerRegisterCNPJScreen} />
+                <Stack.Screen name="SellerRegisterStore" component={SellerRegisterStoreScreen} />
+                <Stack.Screen name="DeliveryMethod" component={DeliveryMethodScreen} />
+                <Stack.Screen name="EditProduct" component={EditProductScreen} />
+                <Stack.Screen name="DeactivateProductSuccess" component={DeactivateProductSuccessScreen} options={{ title: 'Desativar Produto' }} />
+                <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
+                <Stack.Screen name="OrderDetails" component={OrderDetailScreen} />
+                <Stack.Screen name="Documents" component={DocumentsScreen} />
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="ProductQuestions" component={ProductQuestionsList} />
+                <Stack.Screen name="ProfessionalDocuments" component={ProfessionalDocuments} />
+                <Stack.Screen name="EditAddress" component={EditAddressScreen} />
+                <Stack.Screen name="SellerQuestionsListScreen" component={SellerQuestionsListScreen} />
+                <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen} />
+                <Stack.Screen name="PaymentGatewayRegistration" component={PaymentGatewayRegistrationScreen} />
 
-        </Stack.Navigator>
+            </Stack.Navigator>
 
-    </NavigationContainer>
-);
+        </NavigationContainer>
+    );
 }
