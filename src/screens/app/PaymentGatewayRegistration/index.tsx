@@ -83,15 +83,20 @@ export function PaymentGatewayRegistrationScreen() {
       user.professional_profile
     );
 
+    // Sempre CPF por padrão
+    setDocumentType('cpf');
+
     setFormData(prev => ({
       ...prev,
       ...baseData,
+      document: '',
+      type: 'individual' as const,
       phone_numbers: baseData.phone_numbers || [{ ddd: '', number: '', type: 'mobile' as const }],
       // Sincronizar documento com a conta bancária
       default_bank_account: {
         ...prev.default_bank_account!,
-        holder_document: baseData.document || '',
-        holder_type: baseData.default_bank_account?.holder_type || 'individual',
+        holder_document: '',
+        holder_type: 'individual' as const,
       },
     }));
   };
@@ -188,10 +193,10 @@ export function PaymentGatewayRegistrationScreen() {
       const newData = {
         ...prev,
         type: type === 'cpf' ? 'individual' as const : 'corporation' as const,
-        document: '', // Limpar documento ao trocar tipo
+        document: '',
         default_bank_account: {
           ...prev.default_bank_account!,
-          holder_document: '', // Será preenchido automaticamente quando o usuário digitar o documento
+          holder_document: '',
           holder_type: type === 'cpf' ? 'individual' as const : 'company' as const,
         },
       };

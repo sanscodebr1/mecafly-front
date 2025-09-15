@@ -625,13 +625,14 @@ export function formatProfileDataForPagarme(
   if (storeProfile) {
     return {
       ...baseData,
+      document: storeProfile.document || '',
       type: 'corporation',
       company_name: storeProfile.company_name || storeProfile.name || '',
       trading_name: storeProfile.trading_name || storeProfile.name || '',
       annual_revenue: storeProfile.annual_revenue || 0,
       default_bank_account: {
         ...baseData.default_bank_account,
-        holder_document: storeProfile.document || customerProfile.document || '',
+        holder_document: storeProfile.document || '',
         holder_name: storeProfile.company_name || storeProfile.name || '',
         holder_type: 'company' as const,
       },
