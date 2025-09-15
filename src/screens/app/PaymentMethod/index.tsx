@@ -19,7 +19,9 @@ import { fontsizes } from '../../../constants/fontSizes';
 import { getUserCart, CartSummary } from '../../../services/cart';
 import { ShippingOption } from '../../../services/shippingService';
 import { UserAddress } from '../../../services/userAddress';
-import { createPurchase, PaymentMethod, CreatePurchaseData } from '../../../services/purchaseService';
+import { createPurchase, PaymentMethod, CreatePurchaseData, updatePurchaseGatewayOrderId } from '../../../services/purchaseService';
+import { createPagarmePixOrder } from '../../../services/pagarmePixService';
+import { getCurrentUserProfiles } from '../../../services/userProfiles';
 
 interface RouteParams {
   selectedShipping?: ShippingOption;
@@ -147,7 +149,7 @@ export function PaymentMethodScreen() {
         shippingOption: selectedShipping,
         paymentMethod: selectedPayment as PaymentMethod,
         selectedAddress,
-        installments: selectedPayment === 'credit_card' ? selectedInstallments : undefined, // Add installments
+        installments: selectedPayment === 'credit_card' ? selectedInstallments : undefined,
       };
 
       console.log('Resumo da compra:');
@@ -171,6 +173,7 @@ export function PaymentMethodScreen() {
         });
       });
 
+      // Criar purchase no Supabase primeiro
       const purchase = await createPurchase(purchaseData);
 
       if (purchase) {
@@ -182,31 +185,93 @@ export function PaymentMethodScreen() {
         console.log('Parcelas salvas:', purchase.installment);
         console.log('Endereço ID salvo:', purchase.address_id);
 
+        // Se é PIX, integrar com Pagarme
         if (selectedPayment === 'pix') {
-          /* navigation.navigate('PixPayment' as never, {
-            purchaseId: purchase.id,
-            amount: purchase.amount + purchase.shipping_fee
-          }); */
+          console.log('=== INTEGRANDO COM PAGARME PIX ===');
+
+          try {
+            // Buscar perfil do usuário
+            const userProfiles = await getCurrentUserProfiles();
+
+            if (!userProfiles?.customer_profile) {
+              console.error('Perfil do usuário não encontrado');
+              Alert.alert('Erro', 'Perfil do usuário não encontrado. Tente novamente.');
+              return;
+            }
+
+            // Criar pedido PIX na Pagarme
+            const pagarmeOrder = await createPagarmePixOrder({
+              cart,
+              shippingOption: selectedShipping,
+              selectedAddress,
+              customerProfile: userProfiles.customer_profile,
+            });
+
+            if (pagarmeOrder) {
+              console.log('=== PIX CRIADO COM SUCESSO ===');
+
+              // Salvar Order ID da Pagarme na purchase (campo gateway_order_id)
+              const updateSuccess = await updatePurchaseGatewayOrderId(purchase.id, pagarmeOrder.id);
+
+              if (updateSuccess) {
+                console.log('Purchase atualizada com Pagarme Order ID:', pagarmeOrder.id);
+                console.log('Gateway Order ID salvo:', pagarmeOrder.id);
+              } 
+
+              // Verificar se há dados PIX
+              if (pagarmeOrder.charges && pagarmeOrder.charges.length > 0) {
+                const charge = pagarmeOrder.charges[0];
+
+                if (charge.last_transaction) {
+                  const transaction = charge.last_transaction;
+
+                  console.log('=== NAVEGANDO PARA TELA PIX ===');
+                  console.log('Purchase ID:', purchase.id);
+                  console.log('Pagarme Order ID:', pagarmeOrder.id);
+                  console.log('QR Code:', transaction.qr_code);
+                  console.log('QR Code URL:', transaction.qr_code_url);
+                  console.log('Expira em:', transaction.expires_at);
+                  console.log('Valor total:', purchase.amount + purchase.shipping_fee);
+
+                  // Navegar para tela PIX com todos os dados
+                 navigation.navigate('PixPayment' as never, {
+                    purchaseId: purchase.id,
+                    pagarmeOrderId: pagarmeOrder.id,
+                    qrCode: transaction.qr_code,
+                    qrCodeUrl: transaction.qr_code_url,
+                    expiresAt: transaction.expires_at,
+                    amount: purchase.amount + purchase.shipping_fee
+                  } as never);
+
+                } else {
+                  Alert.alert('PIX Criado', 'Pedido PIX criado! Verifique o console para detalhes.');
+                }
+              }
+
+            } else {
+              console.error('Falha ao criar pedido PIX na Pagarme');
+              Alert.alert('Erro', 'Não foi possível gerar o PIX. Tente novamente.');
+            }
+
+          } catch (pagarmeError) {
+            console.error('Erro na integração Pagarme:', pagarmeError);
+            Alert.alert('Erro', 'Erro ao processar PIX. Tente novamente.');
+          }
+
         } else if (selectedPayment === 'boleto') {
-          /* navigation.navigate('BoletoPayment' as never, {
-            purchaseId: purchase.id,
-            amount: purchase.amount + purchase.shipping_fee
-          }); */
+          Alert.alert('Info', 'Boleto será implementado posteriormente.');
+
         } else if (selectedPayment === 'credit_card') {
-          /* navigation.navigate('CreditCardPayment' as never, {
-            purchaseId: purchase.id,
-            amount: purchase.amount + purchase.shipping_fee,
-            installments: selectedInstallments
-          }); */
+          Alert.alert('Info', 'Cartão de crédito será implementado posteriormente.');
+
         } else {
-          // Fallback para tela genérica
-          /* navigation.navigate('OrderSuccess' as never, {
-            purchaseId: purchase.id
-          }); */
+          Alert.alert('Sucesso', 'Pedido criado com sucesso!');
         }
+
       } else {
         Alert.alert('Erro', 'Não foi possível criar o pedido. Tente novamente.');
       }
+
     } catch (error) {
       console.error('Erro ao finalizar pedido:', error);
       Alert.alert('Erro', 'Erro inesperado ao finalizar pedido. Tente novamente.');

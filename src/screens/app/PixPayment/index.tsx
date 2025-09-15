@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,18 +6,62 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Image,
+  Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { fonts } from '../../../constants/fonts';
-import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
+import { wp, hp, isWeb } from '../../../utils/responsive';
 import { Header } from '../../../components/Header';
 import { useScrollAwareHeader } from '../../../hooks/useScrollAwareHeader';
 
+interface PixPaymentRouteParams {
+  purchaseId: number;
+  pagarmeOrderId: string;
+  qrCode: string;
+  qrCodeUrl: string;
+  expiresAt: string;
+  amount: number;
+}
+
 export function PixPaymentScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const params = route.params as PixPaymentRouteParams;
+  
   const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('produtos');
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+  const [timeLeft, setTimeLeft] = useState<string>('');
+  const [isExpired, setIsExpired] = useState(false);
+
+  // Função para calcular tempo restante
+  const calculateTimeLeft = () => {
+    if (!params?.expiresAt) return;
+
+    const now = new Date().getTime();
+    const expiration = new Date(params.expiresAt).getTime();
+    const difference = expiration - now;
+
+    if (difference > 0) {
+      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+      
+      setTimeLeft(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+      setIsExpired(false);
+    } else {
+      setTimeLeft('00:00');
+      setIsExpired(true);
+    }
+  };
+
+  // Atualizar contador a cada segundo
+  useEffect(() => {
+    calculateTimeLeft();
+    const timer = setInterval(calculateTimeLeft, 1000);
+    
+    return () => clearInterval(timer);
+  }, [params?.expiresAt]);
 
   const handleTabPress = (tab: 'produtos' | 'profissionais') => {
     setActiveTab(tab);
@@ -28,16 +72,50 @@ export function PixPaymentScreen() {
     }
   };
 
-  const handleCopyCode = () => {
-    // In a real app, this would copy the Pix code to clipboard
-    Alert.alert('Código copiado!', 'O código Pix foi copiado para a área de transferência.');
+  const handleCopyCode = async () => {
+    if (!params?.qrCode) {
+      Alert.alert('Erro', 'Código PIX não disponível');
+      return;
+    }
+
+    try {
+      await Clipboard.setString(params.qrCode);
+      Alert.alert('Código copiado!', 'O código PIX foi copiado para a área de transferência.');
+    } catch (error) {
+      console.error('Erro ao copiar código:', error);
+      Alert.alert('Erro', 'Não foi possível copiar o código.');
+    }
   };
 
   const handleContinueShopping = () => {
     navigation.navigate('Home' as never);
   };
 
-  const pixCode = "00020101021226770014BR.GOV.BCB.PIX2555 api.itau/pix/qr/ v2/38b94912-6460-4c79-9d37-8f98ec966 9bd5204000053039865802BR5923VINDI PA GAMENTOS ONLINE6007MARILIA62070503** *6304C44E";
+  const formatAmount = (amountInCents: number) => {
+    return `R$ ${(amountInCents / 100).toLocaleString('pt-BR', { 
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2 
+    })}`;
+  };
+
+  // Verificar se temos os dados necessários
+  if (!params) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header 
+          scrollY={scrollY}
+          activeTab={activeTab}
+          onTabPress={handleTabPress}
+        />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Dados do pagamento não encontrados</Text>
+          <TouchableOpacity style={styles.backButton} onPress={handleContinueShopping}>
+            <Text style={styles.backButtonText}>Voltar</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -57,58 +135,91 @@ export function PixPaymentScreen() {
       >
         {/* Order Card */}
         <View style={styles.orderCard}>
-          <Text style={styles.orderNumber}>77</Text>
+          <Text style={styles.orderNumber}>{params.purchaseId}</Text>
           <Text style={styles.orderLabel}>Seu pedido</Text>
           
-          <Text style={styles.copyQrLabel}>Copiar QR Code</Text>
+          {/* Valor do pedido */}
+          <Text style={styles.amountLabel}>Valor: {formatAmount(params.amount)}</Text>
           
-          <View style={styles.pixCodeContainer}>
-            <Text style={styles.pixCode}>{pixCode}</Text>
+          {/* Timer */}
+          <View style={styles.timerContainer}>
+            <Text style={styles.timerLabel}>Tempo para pagamento:</Text>
+            <Text style={[styles.timerText, isExpired && styles.timerExpired]}>
+              {timeLeft}
+            </Text>
           </View>
-          
-          <View style={styles.buttonColumn}>
-            <TouchableOpacity style={styles.copyButton} onPress={handleCopyCode}>
-              <Text style={styles.copyButtonText}>Copiar código</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.continueButton} onPress={handleContinueShopping}>
-              <Text style={styles.continueButtonText}>Continuar comprando</Text>
-            </TouchableOpacity>
-          </View>
+
+          {isExpired && (
+            <View style={styles.expiredContainer}>
+              <Text style={styles.expiredText}>PIX expirado</Text>
+              <TouchableOpacity style={styles.renewButton} onPress={handleContinueShopping}>
+                <Text style={styles.renewButtonText}>Gerar novo PIX</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!isExpired && (
+            <>
+              <Text style={styles.copyQrLabel}>Código PIX para copiar</Text>
+              
+              <View style={styles.pixCodeContainer}>
+                <Text style={styles.pixCode} numberOfLines={3}>
+                  {params.qrCode}
+                </Text>
+              </View>
+              
+              <View style={styles.buttonColumn}>
+                <TouchableOpacity style={styles.copyButton} onPress={handleCopyCode}>
+                  <Text style={styles.copyButtonText}>Copiar código</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity style={styles.continueButton} onPress={handleContinueShopping}>
+                  <Text style={styles.continueButtonText}>Continuar comprando</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Instructions */}
-        <View style={styles.instructionsContainer}>
-          {/* <Text style={styles.instructionsTitle}>Instruções:</Text> */}
-          
-          <View style={styles.instructionItem}>
-            <Text style={styles.bulletPoint}>•</Text>
-            <Text style={styles.instructionText}>
-              Acesse seu Internet Banking ou App de pagamentos e escolha pagar via Pix.
-            </Text>
+        {!isExpired && (
+          <View style={styles.instructionsContainer}>
+            <View style={styles.instructionItem}>
+              <Text style={styles.bulletPoint}>•</Text>
+              <Text style={styles.instructionText}>
+                Acesse seu Internet Banking ou App de pagamentos e escolha pagar via PIX.
+              </Text>
+            </View>
+            
+            <View style={styles.instructionItem}>
+              <Text style={styles.bulletPoint}>•</Text>
+              <Text style={styles.instructionText}>
+                Escaneie o QR Code ou copie o código de pagamento.
+              </Text>
+            </View>
+            
+            <View style={styles.instructionItem}>
+              <Text style={styles.bulletPoint}>•</Text>
+              <Text style={styles.instructionText}>
+                Seu pagamento será aprovado em alguns minutos.
+              </Text>
+            </View>
           </View>
-          
-          <View style={styles.instructionItem}>
-            <Text style={styles.bulletPoint}>•</Text>
-            <Text style={styles.instructionText}>
-              Escaneie o QR Code ou copie o código de pagamento.
-            </Text>
-          </View>
-          
-          <View style={styles.instructionItem}>
-            <Text style={styles.bulletPoint}>•</Text>
-            <Text style={styles.instructionText}>
-              Seu pagamento será aprovado em alguns minutos.
-            </Text>
-          </View>
-        </View>
+        )}
 
-        {/* QR Code Placeholder */}
-        <View style={styles.qrCodeContainer}>
-          <View style={styles.qrCodePlaceholder}>
-            <Text style={styles.qrCodeText}>QR Code</Text>
+        {/* QR Code */}
+        {!isExpired && params.qrCodeUrl && (
+          <View style={styles.qrCodeContainer}>
+            <Text style={styles.qrCodeTitle}>QR Code PIX</Text>
+            <View style={styles.qrCodeWrapper}>
+              <Image 
+                source={{ uri: params.qrCodeUrl }}
+                style={styles.qrCodeImage}
+                resizeMode="contain"
+              />
+            </View>
           </View>
-        </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -124,6 +235,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp('5%'),
     paddingTop: hp('2%'),
     ...(isWeb && { paddingHorizontal: wp('3%'), paddingTop: hp('1%') }),
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: wp('5%'),
+  },
+  errorText: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.medium500,
+    color: '#ff0000',
+    textAlign: 'center',
+    marginBottom: hp('3%'),
+  },
+  backButton: {
+    backgroundColor: '#22D883',
+    borderRadius: wp('6%'),
+    paddingVertical: hp('1.5%'),
+    paddingHorizontal: wp('8%'),
+  },
+  backButtonText: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.medium500,
+    color: '#fff',
   },
   orderCard: {
     backgroundColor: '#fff',
@@ -153,7 +288,55 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold700,
     color: '#000000',
     marginBottom: hp('1%'),
-    ...(isWeb && { fontSize: wp('3%'), marginBottom: hp('3%') }),
+    ...(isWeb && { fontSize: wp('3%'), marginBottom: hp('2%') }),
+  },
+  amountLabel: {
+    fontSize: wp('4.5%'),
+    fontFamily: fonts.bold700,
+    color: '#22D883',
+    marginBottom: hp('2%'),
+    ...(isWeb && { fontSize: wp('3.5%'), marginBottom: hp('1.5%') }),
+  },
+  timerContainer: {
+    alignItems: 'center',
+    marginBottom: hp('2%'),
+  },
+  timerLabel: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.medium500,
+    color: '#666',
+    marginBottom: hp('0.5%'),
+    ...(isWeb && { fontSize: wp('2.8%') }),
+  },
+  timerText: {
+    fontSize: wp('6%'),
+    fontFamily: fonts.bold700,
+    color: '#22D883',
+    ...(isWeb && { fontSize: wp('4.5%') }),
+  },
+  timerExpired: {
+    color: '#ff0000',
+  },
+  expiredContainer: {
+    alignItems: 'center',
+    marginTop: hp('2%'),
+  },
+  expiredText: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.bold700,
+    color: '#ff0000',
+    marginBottom: hp('2%'),
+  },
+  renewButton: {
+    backgroundColor: '#ff6b6b',
+    borderRadius: wp('6%'),
+    paddingVertical: hp('1.5%'),
+    paddingHorizontal: wp('8%'),
+  },
+  renewButtonText: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.medium500,
+    color: '#fff',
   },
   copyQrLabel: {
     fontSize: wp('3.5%'),
@@ -168,15 +351,15 @@ const styles = StyleSheet.create({
     padding: wp('3%'),
     marginBottom: hp('3%'),
     width: '100%',
+    maxHeight: hp('8%'),
     ...(isWeb && { padding: wp('2%'), marginBottom: hp('2%') }),
   },
   pixCode: {
-    fontSize: wp('2.8%'),
+    fontSize: wp('2.5%'),
     fontFamily: fonts.regular400,
     color: '#666',
     textAlign: 'center',
-    lineHeight: hp('2%'),
-    ...(isWeb && { fontSize: wp('2.2%'), lineHeight: hp('1.5%') }),
+    ...(isWeb && { fontSize: wp('2%') }),
   },
   buttonColumn: {
     flexDirection: 'column',
@@ -185,7 +368,6 @@ const styles = StyleSheet.create({
     ...(isWeb && { gap: hp('0.5%') }),
   },
   copyButton: {
-    flex: 1,
     backgroundColor: '#22D883',
     borderRadius: wp('6%'),
     paddingVertical: hp('1.4%'),
@@ -200,7 +382,6 @@ const styles = StyleSheet.create({
     ...(isWeb && { fontSize: wp('2.8%') }),
   },
   continueButton: {
-    flex: 1,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#68676E',
@@ -214,19 +395,11 @@ const styles = StyleSheet.create({
     fontSize: wp('3.5%'),
     fontFamily: fonts.medium500,
     color: '#68676E',
-    borderColor: '#ccc',
     ...(isWeb && { fontSize: wp('2.8%') }),
   },
   instructionsContainer: {
     marginBottom: hp('4%'),
     ...(isWeb && { marginBottom: hp('3%') }),
-  },
-  instructionsTitle: {
-    fontSize: wp('4%'),
-    fontFamily: fonts.bold700,
-    color: '#000000',
-    marginBottom: hp('2%'),
-    ...(isWeb && { fontSize: wp('3.2%'), marginBottom: hp('1.5%') }),
   },
   instructionItem: {
     flexDirection: 'row',
@@ -255,21 +428,50 @@ const styles = StyleSheet.create({
     marginBottom: hp('4%'),
     ...(isWeb && { marginBottom: hp('3%') }),
   },
-  qrCodePlaceholder: {
-    width: wp('40%'),
-    height: wp('40%'),
-    backgroundColor: '#f5f5f5',
+  qrCodeTitle: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.bold700,
+    color: '#000',
+    marginBottom: hp('2%'),
+    ...(isWeb && { fontSize: wp('3.2%') }),
+  },
+  qrCodeWrapper: {
+    backgroundColor: '#fff',
     borderRadius: wp('2%'),
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: wp('3%'),
     borderWidth: 1,
     borderColor: '#ddd',
-    ...(isWeb && { width: wp('25%'), height: wp('25%') }),
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 3,
   },
-  qrCodeText: {
+  qrCodeImage: {
+    width: wp('60%'),
+    height: wp('60%'),
+    ...(isWeb && { width: wp('40%'), height: wp('40%') }),
+  },
+  debugContainer: {
+    backgroundColor: '#f0f0f0',
+    padding: wp('3%'),
+    borderRadius: wp('2%'),
+    marginBottom: hp('4%'),
+  },
+  debugTitle: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.bold700,
+    color: '#333',
+    marginBottom: hp('1%'),
+  },
+  debugText: {
     fontSize: wp('3%'),
-    fontFamily: fonts.medium500,
-    color: '#999',
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginBottom: hp('0.5%'),
     ...(isWeb && { fontSize: wp('2.4%') }),
   },
 });

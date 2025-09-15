@@ -383,32 +383,7 @@ export function CartScreen() {
             </View>
 
             {/* Order Summary */}
-            <View style={styles.summaryContainer}>
-              <Text style={styles.summaryTitle}>Resumo do pedido</Text>
 
-              <View style={styles.summaryBox}>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Subtotal:</Text>
-                  <Text style={styles.summaryValue}>{formatPrice(subtotal)}</Text>
-                </View>
-
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Frete:</Text>
-                  <Text style={styles.summaryValue}>{formatPrice(shippingCost)}</Text>
-                </View>
-
-                <View style={styles.summaryDivider} />
-
-                <View style={styles.summaryRow}>
-                  <Text style={styles.totalLabel}>Total:</Text>
-                  <Text style={styles.totalValue}>{formatPrice(total)}</Text>
-                </View>
-
-                <Text style={styles.installmentInfo}>
-                  {`ou 12x de ${formatPrice(installment12x)} com juros`}
-                </Text>
-              </View>
-            </View>
           </>
         )}
       </ScrollView>

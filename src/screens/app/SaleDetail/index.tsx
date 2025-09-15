@@ -289,9 +289,7 @@ export function SaleDetailScreen() {
           {/* Buyer Details */}
           <Text style={styles.sectionTitle}>Detalhes do comprador:</Text>
           <View style={styles.card}>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>ID do Cliente:</Text> {sale.customer_id}
-            </Text>
+
             <Text style={styles.cardLine}>
               <Text style={styles.cardLabel}>Endereço:</Text> {sale.customer_address}
             </Text>
