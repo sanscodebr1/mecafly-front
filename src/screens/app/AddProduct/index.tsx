@@ -18,19 +18,35 @@ import { BottomButton } from '../../../components/BottomButton';
 import { Colors } from '../../../constants/colors';
 import { getProductCategories, ProductCategory } from '../../../services/productServices';
 import { useProductCreation } from '../../../context/ProductCreationContext';
+import { useAuth } from '../../../context/AuthContext';
+import { PaymentGatewayService } from '../../../services/paymentGateway';
 
 export function AddProductScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
   const { setSelectedCategory } = useProductCreation();
+  const { user } = useAuth();
   
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasGatewayAccount, setHasGatewayAccount] = useState(false);
 
   useEffect(() => {
     loadCategories();
+    checkGatewayAccount();
   }, []);
+
+  const checkGatewayAccount = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const hasAccount = await PaymentGatewayService.hasGatewayAccount(user.id);
+      setHasGatewayAccount(hasAccount);
+    } catch (error) {
+      console.error('Erro ao verificar conta gateway:', error);
+    }
+  };
 
   const loadCategories = async () => {
     try {
@@ -53,13 +69,27 @@ export function AddProductScreen() {
   };
 
   const handleContinue = () => {
-    if (selectedCategoryId) {
-      const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
-      if (selectedCategory) {
-        setSelectedCategory({ id: selectedCategory.id, name: selectedCategory.name });
-        navigation.navigate('AddProductDetails' as never);
-      }
+    if (!selectedCategoryId) return;
+
+    const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
+    if (!selectedCategory) return;
+
+    // Verificar se tem conta de pagamento configurada
+    if (!hasGatewayAccount) {
+      Alert.alert(
+        'Configure sua conta de pagamento',
+        'Para vender produtos, você precisa primeiro configurar sua conta de pagamento.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Configurar', onPress: () => navigation.navigate('PaymentGatewayRegistration' as never) }
+        ]
+      );
+      return;
     }
+
+    // Se pode vender, continuar normalmente
+    setSelectedCategory({ id: selectedCategory.id, name: selectedCategory.name });
+    navigation.navigate('AddProductDetails' as never);
   };
 
   const renderCategoryButton = (category: ProductCategory) => {

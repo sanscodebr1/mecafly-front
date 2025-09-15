@@ -30,12 +30,12 @@ import {
 
 // Tipos de navegação
 type RootStackParamList = {
-  MyPurchases: undefined;
-  PurchaseDetails: { purchaseId: string };
+  MyPurchasesScreen: undefined;
+  PurchaseDetailScreen: { purchaseId: string };
 };
 
-type PurchaseDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'PurchaseDetails'>;
-type PurchaseDetailScreenRouteProp = RouteProp<RootStackParamList, 'PurchaseDetails'>;
+type PurchaseDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'PurchaseDetailScreen'>;
+type PurchaseDetailScreenRouteProp = RouteProp<RootStackParamList, 'PurchaseDetailScreen'>;
 
 export function PurchaseDetailScreen() {
   const navigation = useNavigation<PurchaseDetailScreenNavigationProp>();

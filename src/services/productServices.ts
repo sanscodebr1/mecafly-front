@@ -458,7 +458,7 @@ export const createProduct = async (productData: ProductData): Promise<number> =
       category: productData.category,
       brand_id: productData.brand,
       store_id: productData.storeId,
-      status: 'pending',
+      status: 'pending', // Sempre pending para aprovação do admin
       stock: productData.stock,
       // Novos campos de frete
       height: productData.height,
@@ -587,6 +587,7 @@ export const createCompleteProduct = async (
     throw error;
   }
 };
+
 
 // Context interface for product creation flow
 export interface ProductCreationContext {

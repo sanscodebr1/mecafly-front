@@ -64,6 +64,7 @@ import { PaymentGatewayRegistrationScreen } from "../screens/app/PaymentGatewayR
 import { UserAddress } from '../services/userAddress';
 import { MyPurchasesScreen } from "../screens/app/MyPurchases";
 import { PurchaseDetailScreen } from "../screens/app/PurchaseDetails";
+import { KycTestScreen } from "../screens/app/KycTest";
 
 // Enable native screens
 enableScreens();
@@ -129,7 +130,8 @@ export type RootStackParamList = {
   ProductQuestions: undefined;
   SellerQuestionsListScreen: undefined;
   MyPurchasesScreen: undefined;
-  PurchaseDetailScreen: undefined;
+  PurchaseDetailScreen: { purchaseId: string };
+  KycTest: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -203,8 +205,9 @@ export function Routes() {
         <Stack.Screen name="AddProductShippingScreen" component={AddProductShippingScreen}/>
         <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen}/>
         <Stack.Screen name="PaymentGatewayRegistration" component={PaymentGatewayRegistrationScreen}/>
-        <Stack.Screen name="MyPurchases" component={MyPurchasesScreen}/>
-        <Stack.Screen name="PurchaseDetails" component={PurchaseDetailScreen}/>
+        <Stack.Screen name="MyPurchasesScreen" component={MyPurchasesScreen}/>
+        <Stack.Screen name="PurchaseDetailScreen" component={PurchaseDetailScreen}/>
+        <Stack.Screen name="KycTest" component={KycTestScreen}/>
       </Stack.Navigator>
     </NavigationContainer>
   );

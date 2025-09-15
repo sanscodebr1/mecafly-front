@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
 import { fonts } from '../../../constants/fonts';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
 import { SimpleHeader } from '../../../components/SimpleHeader';
@@ -26,8 +27,16 @@ import {
   PurchaseFilters
 } from '../../../services/userPurchaseStore';
 
+// Tipos de navegação
+type RootStackParamList = {
+  MyPurchasesScreen: undefined;
+  PurchaseDetailScreen: { purchaseId: string };
+};
+
+type MyPurchasesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'MyPurchasesScreen'>;
+
 export function MyPurchasesScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<MyPurchasesScreenNavigationProp>();
   const [purchases, setPurchases] = useState<UserPurchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<UserPurchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -207,7 +216,7 @@ export function MyPurchasesScreen() {
                 key={purchase.purchase_id}
                 style={styles.card}
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate('PurchaseDetails' as never, { purchaseId: purchase.purchase_id.toString() })}
+                onPress={() => navigation.navigate('PurchaseDetailScreen', { purchaseId: purchase.purchase_id.toString() })}
               >
                 <View style={styles.cardLeft}>
                   <Text style={styles.cardTitle}>

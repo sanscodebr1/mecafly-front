@@ -1,5 +1,6 @@
-export const Colors ={
-    primaryRed: '#ed1c24', // Tomato
-    primaryBlack: '#000000', // Green
-    background: '#ffffff', // Light Gray
+export const Colors = {
+    primaryRed: '#ed1c24',
+    primaryBlack: '#000000',
+    background: '#ffffff',
+    primary: '#ed1c24',
 }

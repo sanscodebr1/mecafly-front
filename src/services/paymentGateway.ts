@@ -499,8 +499,164 @@ export class PaymentGatewayService {
       const accountGateway = await this.getUserAccountGateway(userId);
       return accountGateway?.status === 'approved';
     } catch (error) {
-
+      console.error('Erro ao verificar se usuário pode vender:', error);
       return false;
+    }
+  }
+
+  // Verificar se usuário tem conta gateway configurada independente do status
+  static async hasGatewayAccount(userId: string): Promise<boolean> {
+    try {
+      const accountGateway = await this.getUserAccountGateway(userId);
+      return accountGateway !== null;
+    } catch (error) {
+      console.error('Erro ao verificar conta gateway:', error);
+      return false;
+    }
+  }
+
+  // Obter status detalhado da conta gateway
+  static async getGatewayStatus(userId: string): Promise<{
+    hasAccount: boolean;
+    status: AccountGatewayStatus | null;
+    canSell: boolean;
+    needsKYC: boolean;
+    affiliationUrl?: string;
+  }> {
+    try {
+      const accountGateway = await this.getUserAccountGateway(userId);
+      
+      if (!accountGateway) {
+        return {
+          hasAccount: false,
+          status: null,
+          canSell: false,
+          needsKYC: true,
+        };
+      }
+
+      return {
+        hasAccount: true,
+        status: accountGateway.status,
+        canSell: accountGateway.status === 'approved',
+        needsKYC: accountGateway.status !== 'approved',
+        affiliationUrl: accountGateway.affiliation_url,
+      };
+    } catch (error) {
+      console.error('Erro ao obter status gateway:', error);
+      return {
+        hasAccount: false,
+        status: null,
+        canSell: false,
+        needsKYC: true,
+      };
+    }
+  }
+
+  // Gerar link de KYC para validação de identidade
+  static async generateKycLink(recipientId: string): Promise<string | null> {
+    try {
+      const apiKey = process.env.EXPO_PUBLIC_PAGARME_API_KEY;
+      if (!apiKey) {
+        console.log('Erro: PAGARME_API_KEY não configurada');
+        return null;
+      }
+
+      // Usar btoa se disponível (web), senão usar Buffer (Node.js/React Native)
+      const basic = typeof btoa !== 'undefined'
+        ? btoa(`${apiKey}:`)
+        : Buffer.from(`${apiKey}:`).toString('base64');
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.log('Timeout de 30s atingido na geração do link KYC');
+        controller.abort();
+      }, 30000);
+
+      try {
+        console.log('Gerando link de KYC para recipient:', recipientId);
+        const response = await fetch(`https://api.pagar.me/core/v5/recipients/${recipientId}/kyc_link`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${basic}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        console.log('Resposta da geração de link KYC:', response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log('Erro ao gerar link KYC:', response.status, errorText);
+          return null;
+        }
+
+        const linkData = await response.json();
+        console.log('Link KYC gerado com sucesso:', linkData);
+        
+        // Retornar URL do link KYC
+        if (linkData.url) {
+          // Garantir que a URL tenha protocolo HTTPS se necessário
+          const url = linkData.url.startsWith('http') ? linkData.url : `https://${linkData.url}`;
+          return url;
+        }
+        
+        return null;
+
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('Timeout na geração do link KYC');
+          return null;
+        }
+
+        console.log('Erro na geração do link KYC:', error);
+        return null;
+      }
+    } catch (error) {
+      console.error('Erro ao gerar link KYC:', error);
+      return null;
+    }
+  }
+
+  // Obter ou gerar link de KYC para o usuário
+  static async getOrGenerateKycLink(userId: string): Promise<string | null> {
+    try {
+      const accountGateway = await this.getUserAccountGateway(userId);
+      
+      if (!accountGateway) {
+        console.log('Usuário não tem conta gateway configurada');
+        return null;
+      }
+
+      // Se já tem affiliation_url, usar ela
+      if (accountGateway.affiliation_url) {
+        console.log('Usando affiliation_url existente:', accountGateway.affiliation_url);
+        return accountGateway.affiliation_url;
+      }
+
+      // Se não tem, gerar um novo link
+      console.log('Gerando novo link de KYC para recipient:', accountGateway.external_id);
+      const newLink = await this.generateKycLink(accountGateway.external_id);
+      
+      if (newLink) {
+        // Atualizar o affiliation_url no banco
+        await supabase
+          .from('account_gateway')
+          .update({ affiliation_url: newLink })
+          .eq('external_id', accountGateway.external_id);
+        
+        console.log('Link de KYC atualizado no banco de dados');
+      }
+
+      return newLink;
+    } catch (error) {
+      console.error('Erro ao obter/gerar link KYC:', error);
+      return null;
     }
   }
 }

@@ -131,7 +131,7 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
     </TouchableOpacity> */}
 
             {/* Opções comuns */}
-             <TouchableOpacity
+            <TouchableOpacity
               style={styles.menuOption}
               onPress={() => navigation.navigate('Home' as never)}
             >
@@ -153,7 +153,7 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
 
             <TouchableOpacity
               style={styles.menuOption}
-              onPress={() => navigation.navigate('MyPurchases' as never)}
+              onPress={() => navigation.navigate('MyPurchasesScreen' as never)}
             >
               <Image style={styles.navIcon} source={require('../assets/icons/homegray.png')} />
               <Text style={styles.menuOptionText}>Minhas compras</Text>
@@ -168,7 +168,7 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
       <Text style={styles.menuOptionText}>Minhas contratações</Text>
     </TouchableOpacity> */}
 
-{/*             <TouchableOpacity
+            {/*             <TouchableOpacity
               style={styles.menuOption}
               onPress={() => navigation.navigate('Documents' as never)}
             >

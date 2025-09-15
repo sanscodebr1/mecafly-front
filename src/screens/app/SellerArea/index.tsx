@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -29,6 +30,18 @@ export function SellerAreaScreen() {
   const [storeStatus, setStoreStatus] = useState<string | null>(null);
   const [accountGateway, setAccountGateway] = useState<AccountGateway | null>(null);
   const [showPaymentBanner, setShowPaymentBanner] = useState(true);
+  const [gatewayStatus, setGatewayStatus] = useState<{
+    hasAccount: boolean;
+    status: 'pending' | 'approved' | 'refused' | null;
+    canSell: boolean;
+    needsKYC: boolean;
+    affiliationUrl?: string;
+  }>({
+    hasAccount: false,
+    status: null,
+    canSell: false,
+    needsKYC: true,
+  });
 
   useEffect(() => {
     const fetchStore = async () => {
@@ -51,8 +64,11 @@ export function SellerAreaScreen() {
       if (!user?.id) return;
       console.log('Buscando conta gateway para usuário:', user.id);
       const gateway = await PaymentGatewayService.getUserAccountGateway(user.id);
+      const status = await PaymentGatewayService.getGatewayStatus(user.id);
       console.log('Conta gateway encontrada:', gateway);
+      console.log('Status gateway:', status);
       setAccountGateway(gateway);
+      setGatewayStatus(status);
     };
 
     fetchStore();
@@ -96,9 +112,46 @@ export function SellerAreaScreen() {
 
   const handleButtonPress = (screen: string) => {
     if (screen === 'MyProducts') navigation.navigate('MyProducts' as never);
-    if (screen === 'MySales') navigation.navigate('MySales' as never);
+    if (screen === 'MySales') {
+      if (!gatewayStatus.canSell) {
+        Alert.alert(
+          'Conta em análise',
+          'Você precisa aguardar a aprovação da sua conta de pagamento para visualizar vendas.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      navigation.navigate('MySales' as never);
+    }
     if (screen === 'MyProfile') navigation.navigate('Profile' as never);
-    if (screen === 'Questions') navigation.navigate('SellerQuestionsListScreen' as never);
+    if (screen === 'Questions') {
+      if (!gatewayStatus.canSell) {
+        Alert.alert(
+          'Conta em análise',
+          'Você precisa aguardar a aprovação da sua conta de pagamento para responder perguntas.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      navigation.navigate('SellerQuestionsListScreen' as never);
+    }
+    if (screen === 'KycTest') navigation.navigate('KycTest' as never);
+  };
+
+  const handleAddProduct = () => {
+    if (!gatewayStatus.hasAccount) {
+      Alert.alert(
+        'Configure sua conta de pagamento',
+        'Para vender produtos, você precisa primeiro configurar sua conta de pagamento.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Configurar', onPress: handlePaymentGatewayPress }
+        ]
+      );
+      return;
+    }
+
+    navigation.navigate('AddProduct' as never);
   };
 
   const handlePaymentGatewayPress = () => {
@@ -111,10 +164,12 @@ export function SellerAreaScreen() {
   };
 
   const sellerButtons = [
-    { id: '1', title: 'Meus produtos', screen: 'MyProducts' },
-    { id: '2', title: 'Minhas vendas', screen: 'MySales' },
-    { id: '3', title: 'Meu perfil', screen: 'MyProfile' },
-    { id: '4', title: 'Perguntas', screen: 'Questions' },
+    { id: '1', title: 'Adicionar produto', screen: 'AddProduct', action: handleAddProduct },
+    { id: '2', title: 'Meus produtos', screen: 'MyProducts' },
+    { id: '3', title: 'Minhas vendas', screen: 'MySales' },
+    { id: '4', title: 'Meu perfil', screen: 'MyProfile' },
+    { id: '5', title: 'Perguntas', screen: 'Questions' },
+    { id: '6', title: 'Teste KYC', screen: 'KycTest' },
   ];
 
   return (
@@ -152,7 +207,7 @@ export function SellerAreaScreen() {
                 <TouchableOpacity
                   key={button.id}
                   style={styles.sellerButton}
-                  onPress={() => handleButtonPress(button.screen)}
+                  onPress={() => button.action ? button.action() : handleButtonPress(button.screen)}
                 >
                   <Text style={styles.buttonText}>{button.title}</Text>
                   <Text style={styles.buttonArrow}>→</Text>

@@ -186,15 +186,17 @@ export class WebhookService {
         case 'active':
           newStatus = 'approved';
           break;
-        case 'inactive':
         case 'rejected':
+        case 'inactive':
           newStatus = 'refused';
           break;
+        case 'pending':
         default:
           newStatus = 'pending';
       }
 
       // Atualizar conta gateway
+      console.log(`Atualizando conta gateway ${recipientId} para status: ${newStatus}`);
       const { error } = await supabase
         .from('account_gateway')
         .update({
@@ -210,6 +212,12 @@ export class WebhookService {
       }
 
       console.log(`Conta gateway ${recipientId} atualizada para status: ${newStatus}`);
+      
+      // KYC aprovado - usuário agora pode vender (produtos continuam pending para aprovação do admin)
+      if (newStatus === 'approved') {
+        console.log('Usuário aprovado no KYC - produtos continuam pending para aprovação do admin');
+      }
+      
       return true;
 
     } catch (error) {
@@ -278,7 +286,7 @@ export class WebhookService {
    */
   static async simulateWebhook(
     recipientId: string,
-    status: 'active' | 'inactive' | 'rejected',
+    status: 'active' | 'inactive' | 'rejected' | 'pending',
     affiliationUrl?: string
   ): Promise<boolean> {
     const mockEvent: PagarmeWebhookEvent = {
@@ -293,6 +301,113 @@ export class WebhookService {
     };
 
     return await this.processPagarmeWebhook(mockEvent);
+  }
+
+  /**
+   * Simular webhook completo para um usuário específico
+   */
+  static async simulateUserWebhook(
+    userId: string,
+    status: 'active' | 'inactive' | 'rejected' | 'pending',
+    affiliationUrl?: string
+  ): Promise<boolean> {
+    try {
+      // Buscar recipient_id do usuário
+      const { data: accountGateway, error } = await supabase
+        .from('account_gateway')
+        .select('external_id')
+        .eq('user_id', userId)
+        .single();
+
+      if (error || !accountGateway) {
+        console.error('Usuário não tem conta gateway configurada:', error);
+        return false;
+      }
+
+      return await this.simulateWebhook(accountGateway.external_id, status, affiliationUrl);
+    } catch (error) {
+      console.error('Erro ao simular webhook do usuário:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Testar fluxo completo de KYC para um usuário
+   */
+  static async testKycFlow(userId: string): Promise<{
+    success: boolean;
+    steps: string[];
+    errors: string[];
+  }> {
+    const steps: string[] = [];
+    const errors: string[] = [];
+
+    try {
+      // Step 1: Verificar se usuário tem conta gateway
+      steps.push('1. Verificando conta gateway...');
+      const { data: accountGateway, error } = await supabase
+        .from('account_gateway')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error || !accountGateway) {
+        errors.push('Usuário não tem conta gateway configurada');
+        return { success: false, steps, errors };
+      }
+
+      steps.push(`Conta gateway encontrada: ${accountGateway.external_id}`);
+
+      // Step 2: Simular status "pending"
+      steps.push('2. Simulando status "pending"...');
+      const pendingResult = await this.simulateUserWebhook(userId, 'pending');
+      if (!pendingResult) {
+        errors.push('Falha ao simular status pending');
+        return { success: false, steps, errors };
+      }
+      steps.push('Status "pending" aplicado');
+
+      // Step 3: Simular status "approved"
+      steps.push('3. Simulando aprovação KYC...');
+      const approvedResult = await this.simulateUserWebhook(userId, 'active', 'https://kyc.pagarme.com/test-link');
+      if (!approvedResult) {
+        errors.push('Falha ao simular aprovação');
+        return { success: false, steps, errors };
+      }
+      steps.push('Status "approved" aplicado');
+
+      // Step 4: Verificar se produtos foram publicados
+      steps.push('4. Verificando publicação de produtos...');
+      const { data: storeProfile } = await supabase
+        .from('store_profile')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+
+      if (storeProfile) {
+        const { data: draftProducts } = await supabase
+          .from('product')
+          .select('id, status')
+          .eq('store_id', storeProfile.id)
+          .eq('status', 'draft');
+
+        const { data: pendingProducts } = await supabase
+          .from('product')
+          .select('id, status')
+          .eq('store_id', storeProfile.id)
+          .eq('status', 'pending');
+
+        steps.push(`Produtos em rascunho: ${draftProducts?.length || 0}`);
+        steps.push(`Produtos pendentes: ${pendingProducts?.length || 0}`);
+      }
+
+      steps.push('Fluxo de KYC testado com sucesso!');
+      return { success: true, steps, errors };
+
+    } catch (error) {
+      errors.push(`Erro inesperado: ${error}`);
+      return { success: false, steps, errors };
+    }
   }
 
   /**
