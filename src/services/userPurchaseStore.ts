@@ -88,6 +88,22 @@ export interface PurchaseFilters {
   endDate?: string;
 }
 
+// Função auxiliar para buscar endereço por ID
+async function getAddressById(addressId: number) {
+  const { data, error } = await supabase
+    .from('user_address')
+    .select('*')
+    .eq('id', addressId)
+    .single();
+    
+  if (error) {
+    console.error('Erro ao buscar endereço:', error);
+    return null;
+  }
+  
+  return data;
+}
+
 // Buscar todas as compras do usuário
 export async function getUserPurchases(filters?: PurchaseFilters): Promise<UserPurchase[]> {
   try {
@@ -109,15 +125,7 @@ export async function getUserPurchases(filters?: PurchaseFilters): Promise<UserP
         shipping_fee,
         payment_method,
         installment,
-        address_id,
-        user_address!inner(
-          address,
-          number,
-          neighborhood,
-          city,
-          state,
-          zipcode
-        )
+        address_id
       `)
       .eq('customer_id', user.id)
       .order('created_at', { ascending: false });
@@ -146,9 +154,10 @@ export async function getUserPurchases(filters?: PurchaseFilters): Promise<UserP
       return [];
     }
 
-    // Para cada purchase, buscar a contagem de itens
+    // Para cada purchase, buscar a contagem de itens e o endereço
     const purchasesWithItemCount = await Promise.all(
       data.map(async (purchase) => {
+        // Buscar contagem de itens
         const { count: itemsCount, error: countError } = await supabase
           .from('vw_cart_detail')
           .select('*', { count: 'exact', head: true })
@@ -159,7 +168,11 @@ export async function getUserPurchases(filters?: PurchaseFilters): Promise<UserP
           console.error(`Erro ao contar itens da purchase ${purchase.id}:`, countError);
         }
 
-        const address = purchase.user_address?.[0];
+        // Buscar endereço se address_id existir
+        let address = null;
+        if (purchase.address_id) {
+          address = await getAddressById(purchase.address_id);
+        }
         
         const userPurchase: UserPurchase = {
           purchase_id: purchase.id,
@@ -223,15 +236,7 @@ export async function getUserPurchaseDetails(purchaseId: string): Promise<UserPu
         shipping_fee,
         payment_method,
         installment,
-        address_id,
-        user_address!inner(
-          address,
-          number,
-          neighborhood,
-          city,
-          state,
-          zipcode
-        )
+        address_id
       `)
       .eq('id', parseInt(purchaseId))
       .eq('customer_id', user.id)
@@ -247,6 +252,12 @@ export async function getUserPurchaseDetails(purchaseId: string): Promise<UserPu
       return null;
     }
 
+    // Buscar endereço se address_id existir
+    let address = null;
+    if (purchaseData.address_id) {
+      address = await getAddressById(purchaseData.address_id);
+    }
+
     // Buscar itens da compra através da view vw_cart_detail
     const { data: itemsData, error: itemsError } = await supabase
       .from('vw_cart_detail')
@@ -259,8 +270,6 @@ export async function getUserPurchaseDetails(purchaseId: string): Promise<UserPu
       console.error('Erro ao buscar itens da purchase:', itemsError);
       return null;
     }
-
-    const address = purchaseData.user_address?.[0];
     
     const items: UserPurchaseItem[] = (itemsData || []).map(item => ({
       cart_id: item.cart_id.toString(),
