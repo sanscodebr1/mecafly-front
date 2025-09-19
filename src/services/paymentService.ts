@@ -1,4 +1,3 @@
-// services/paymentService.ts - Updated interface
 import { supabase } from '../lib/supabaseClient';
 import { CartSummary } from './cart';
 import { ShippingOption } from './shippingService';
@@ -103,11 +102,49 @@ export interface PagarmeCreditCardResponse {
   }>;
 }
 
-// Interface para resposta de boleto (para futuro uso)
+// Interface para resposta de boleto
 export interface PagarmeBoletoResponse {
   id: string;
+  code: string;
+  amount: number;
+  currency: string;
+  closed: boolean;
   status: string;
-  [key: string]: any;
+  created_at: string;
+  updated_at: string;
+  closed_at?: string;
+  customer: any;
+  items: any[];
+  charges: Array<{
+    id: string;
+    code: string;
+    gateway_id: string;
+    amount: number;
+    status: string;
+    currency: string;
+    payment_method: string;
+    created_at: string;
+    updated_at: string;
+    customer: any;
+    last_transaction: {
+      id: string;
+      transaction_type: string;
+      gateway_id: string;
+      amount: number;
+      status: string;
+      success: boolean;
+      pdf?: string; // URL do PDF do boleto
+      line?: string; // Linha digitável do boleto
+      due_at?: string; // Data de vencimento
+      barcode?: string; // Código de barras
+      expires_at?: string;
+      created_at: string;
+      updated_at: string;
+      gateway_response: Record<string, any>;
+      antifraud_response: Record<string, any>;
+      metadata: Record<string, any>;
+    };
+  }>;
 }
 
 // Interface unificada de resposta
@@ -335,7 +372,7 @@ export async function createCreditCardPayment(data: {
 }
 
 /**
- * Função específica para boleto (para futuro uso)
+ * NOVA FUNÇÃO: Pagamento via boleto
  */
 export async function createBoletoPayment(data: {
   cart: CartSummary;

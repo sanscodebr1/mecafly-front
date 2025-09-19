@@ -70,7 +70,7 @@ export function PaymentMethodScreen() {
   const { selectedShipping, selectedAddress, storeGroups } = (route.params as RouteParams) || {};
 
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
-  
+
   // Estados para cartões salvos
   const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
@@ -408,7 +408,7 @@ export function PaymentMethodScreen() {
         Alert.alert('Erro', paymentResult.error || 'Não foi possível processar o pagamento.');
         return;
       }
-      
+
       const pagarmeOrder = paymentResult.data as any;
       const createdPurchase = paymentResult.purchase;
 
@@ -418,7 +418,7 @@ export function PaymentMethodScreen() {
             storeGroups,
             selectedShipping.selectedOptions,
             selectedAddress,
-            createdPurchase.id 
+            createdPurchase.id
           );
 
           if (!melhorEnvioResult.success) {
@@ -482,7 +482,32 @@ export function PaymentMethodScreen() {
         } as never);
 
       } else if (selectedPayment === 'boleto') {
-        Alert.alert('Sucesso', 'Boleto gerado com sucesso!');
+        if (pagarmeOrder.charges && pagarmeOrder.charges.length > 0) {
+          const charge = pagarmeOrder.charges[0];
+
+          if (charge.last_transaction) {
+            const transaction = charge.last_transaction;
+
+            // LOG COMPLETO DA RESPOSTA DO BOLETO (manter para debug)
+            console.log('=== RESPOSTA COMPLETA DO BOLETO ===');
+            console.log('Full pagarmeOrder:', JSON.stringify(pagarmeOrder, null, 2));
+            console.log('Charge:', JSON.stringify(charge, null, 2));
+            console.log('Transaction:', JSON.stringify(transaction, null, 2));
+
+            // Navegar para a tela de sucesso do boleto
+            navigation.navigate('BoletoPayment' as never, {
+              purchaseId: createdPurchase.id,
+              pagarmeOrderId: pagarmeOrder.id,
+              boletoData: transaction,
+              amount: createdPurchase.amount + createdPurchase.shipping_fee
+            } as never);
+
+          } else {
+            Alert.alert('Boleto Gerado', 'Boleto criado com sucesso, mas dados não disponíveis.');
+          }
+        } else {
+          Alert.alert('Boleto Gerado', 'Boleto criado com sucesso, mas dados não disponíveis.');
+        }
       }
 
     } catch (error) {
@@ -496,7 +521,7 @@ export function PaymentMethodScreen() {
   const getSelectedCardDisplay = () => {
     if (!selectedCardId) return 'Selecionar cartão salvo';
     const card = savedCards.find(c => c.id === selectedCardId);
-    return card ? `${card.brand} **** ${card.last_4_digits}` : 'Cartão não encontrado';
+    return card ? `${card.brand} **** **** **** ${card.last_4_digits}` : 'Cartão não encontrado';
   };
 
   // Renderizar cartão salvo no dropdown
@@ -514,7 +539,7 @@ export function PaymentMethodScreen() {
     >
       <View style={styles.cardDropdownContent}>
         <Text style={styles.cardDropdownBrand}>{item.brand}</Text>
-        <Text style={styles.cardDropdownNumber}>**** {item.last_4_digits}</Text>
+        <Text style={styles.cardDropdownNumber}>**** **** **** {item.last_4_digits}</Text>
       </View>
       <TouchableOpacity
         style={styles.cardDropdownDelete}
@@ -573,6 +598,16 @@ export function PaymentMethodScreen() {
     if (selectedCardId) return true; // Cartão selecionado
     if (showNewCardForm && cardNumber && cardValidity && cardCode && cardHolder) {
       return true; // Dados do novo cartão preenchidos
+    }
+    return false;
+  };
+
+  const canFinalizeOrder = () => {
+    if (selectedPayment === 'credit_card') {
+      return canFinalizeCreditCardOrder();
+    }
+    if (selectedPayment === 'pix' || selectedPayment === 'boleto') {
+      return true; // PIX e boleto não precisam de validações extras
     }
     return false;
   };
@@ -846,16 +881,16 @@ export function PaymentMethodScreen() {
                   )}
 
                   {isSelected && option.id === 'boleto' && (
-                    <View style={styles.formContentContainer}>
-                      <View style={styles.inputFieldContainer}>
-                        <Text style={styles.inputLabel}>Código de barras:</Text>
-                        <View style={styles.inputWrapper}>
-                          <TextInput
-                            style={styles.inputField}
-                            placeholder="Código de barras"
-                          />
-                        </View>
-                      </View>
+                    <View style={styles.boletoExpandedSection}>
+                      <Text style={styles.boletoInstructions}>
+                        Após finalizar o pedido, você receberá o código de barras para pagamento.
+                        O boleto pode ser pago em qualquer banco, lotérica ou pelo internet banking.
+                      </Text>
+                      <Text style={styles.boletoTotalAmount}>{formatPrice(totals.total)}</Text>
+                      <Text style={styles.boletoExpiryInfo}>
+                        Prazo de vencimento: 3 dias úteis
+                      </Text>
+
                       <TouchableOpacity
                         style={[
                           styles.finalizeOrderButton,
@@ -867,11 +902,11 @@ export function PaymentMethodScreen() {
                         {processingPayment ? (
                           <View style={styles.loadingButtonContainer}>
                             <ActivityIndicator size="small" color="#fff" />
-                            <Text style={styles.finalizeOrderButtonText}>Processando...</Text>
+                            <Text style={styles.finalizeOrderButtonText}>Gerando boleto...</Text>
                           </View>
                         ) : (
                           <Text style={styles.finalizeOrderButtonText}>
-                            Finalizar pedido
+                            Gerar boleto
                           </Text>
                         )}
                       </TouchableOpacity>
@@ -990,7 +1025,6 @@ export function PaymentMethodScreen() {
     </SafeAreaView>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -1485,6 +1519,31 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: wp('4%'),
     fontFamily: fonts.regular400,
+  },
+  // Estilos específicos do boleto
+  boletoExpandedSection: {
+    borderRadius: wp('2%'),
+    padding: wp('4%'),
+    marginTop: hp('0.8%'),
+  },
+  boletoInstructions: {
+    fontSize: wp('3.2%'),
+    fontFamily: fonts.regular400,
+    color: '#000000',
+    lineHeight: hp('2%'),
+    marginBottom: hp('1.6%'),
+  },
+  boletoTotalAmount: {
+    fontSize: wp('5%'),
+    fontFamily: fonts.bold700,
+    color: '#000000',
+    marginBottom: hp('1%'),
+  },
+  boletoExpiryInfo: {
+    fontSize: wp('3%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginBottom: hp('1.6%'),
   },
   pixExpandedSection: {
     borderRadius: wp('2%'),
