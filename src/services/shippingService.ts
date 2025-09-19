@@ -109,7 +109,6 @@ async function callShippingEdgeFunction(action: string, payload: any) {
     console.log('📋 Payload:', JSON.stringify(payload, null, 2));
     console.log('🔑 Token (primeiros 20 chars):', session.access_token.substring(0, 20) + '...');
     
-    // CORREÇÃO: Usar a URL e key corretas do Supabase
     const response = await fetch(
       `${supabase.supabaseUrl}/functions/v1/calculate-shipping?action=${action}`,
       {
@@ -117,7 +116,6 @@ async function callShippingEdgeFunction(action: string, payload: any) {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
-          // CORREÇÃO: Usar a chave anônima do seu supabaseClient.ts
           'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzc2lvdmtlZXpmaGF2ZmlzYWxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYxNDM1NjAsImV4cCI6MjA3MTcxOTU2MH0.Ne_L8SZJn5Lg3_DY1i_2RVHABGLlQrcma7JkW3TkNgc',
         },
         body: JSON.stringify(payload),
@@ -125,7 +123,6 @@ async function callShippingEdgeFunction(action: string, payload: any) {
     );
 
     console.log('📡 Response Status:', response.status);
-    console.log('📡 Response Headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -271,6 +268,27 @@ export async function getPurchaseShipmentsWithTracking(purchaseId: number): Prom
 
     return result;
   } catch (error) {
+    return { success: false, error: `Erro inesperado: ${error}` };
+  }
+}
+
+// NOVA FUNÇÃO: Pagar etiquetas de uma compra (aceitar venda)
+export async function payShippingLabelsForPurchase(purchaseId: number): Promise<{
+  success: boolean;
+  message?: string;
+  data?: any;
+  error?: string;
+}> {
+  try {
+    console.log('💰 Pagando etiquetas para purchase:', purchaseId);
+    
+    const result = await callShippingEdgeFunction('pay-shipping-labels', {
+      purchaseId
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Erro ao pagar etiquetas:', error);
     return { success: false, error: `Erro inesperado: ${error}` };
   }
 }

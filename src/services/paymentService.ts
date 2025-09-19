@@ -5,6 +5,7 @@ import { ShippingOption } from './shippingService';
 import { UserAddress } from './userAddress';
 import { CustomerProfile } from './userProfiles';
 import { Purchase } from './purchaseService'; 
+
 export type PaymentMethod = 'pix' | 'credit_card' | 'boleto';
 
 export interface CreatePaymentData {
@@ -215,6 +216,44 @@ export async function createPayment(paymentData: CreatePaymentData): Promise<Pay
     }
   } catch (error) {
     console.error('❌ Erro ao criar pagamento:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro inesperado'
+    };
+  }
+}
+
+/**
+ * NOVA FUNÇÃO: Cancelar uma venda na Pagarme
+ */
+export async function cancelSalePayment(gatewayOrderId: string): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    console.log('=== CANCELANDO PAGAMENTO NA PAGARME ===');
+    console.log('Gateway Order ID:', gatewayOrderId);
+    
+    const result = await callPaymentEdgeFunction('cancel_payment', {
+      gatewayOrderId
+    });
+
+    if (result?.success) {
+      console.log('✅ Pagamento cancelado com sucesso na Pagarme');
+      return {
+        success: true,
+        message: result.message || 'Pagamento cancelado com sucesso'
+      };
+    } else {
+      console.warn('⚠️ Erro ao cancelar pagamento:', result);
+      return {
+        success: false,
+        error: result.error || 'Erro desconhecido ao cancelar pagamento'
+      };
+    }
+  } catch (error) {
+    console.error('❌ Erro ao cancelar pagamento:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Erro inesperado'
