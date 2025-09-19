@@ -93,7 +93,7 @@ export function MyProductsScreen() {
         'Para vender produtos, você precisa primeiro configurar sua conta de pagamento.',
         [
           { text: 'Cancelar', style: 'cancel' },
-          { text: 'Configurar', onPress: () => navigation.navigate('PaymentGatewayRegistration' as never) }
+          { text: 'Configurar', onPress: () => (navigation as any).navigate('PaymentGatewayRegistration', { context: 'store' }) }
         ]
       );
       return;

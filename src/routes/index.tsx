@@ -37,14 +37,15 @@ import { AddressScreen } from "../screens/app/Professional/Address";
 import { PixPaymentScreen } from "../screens/app/PixPayment";
 import { MyContractsScreen } from "../screens/app/MyContracts";
 import { ProfessionalRegistrationScreen } from "../screens/app/Professional/ProfessionalRegistration";
+import { ProfessionalRegistrationCNPJScreen } from "../screens/app/Professional/ProfessionalRegistrationCNPJ";
+import { ProfessionalDocTypeSelectScreen } from "../screens/app/Professional/ProfessionalDocTypeSelect";
 import { ProfessionalProfileScreen } from "../screens/app/Professional/ProfessionalProfile";
 import { RegistrationAnalysisScreen } from "../screens/app/Professional/RegistrationAnalysis";
 import { ProfessionalAreaScreen } from "../screens/app/Professional/ProfessionalArea";
 import { MyAppointmentsScreen } from "../screens/app/Professional/MyAppointments";
 import { HistoryScreen } from "../screens/app/Professional/History";
-import { SellerRegisterScreen } from "../screens/app/SellerRegister";
 import { SellerRegisterCPFScreen } from "../screens/app/SellerRegisterCPF";
-import { SellerRegisterCNPJScreen } from "../screens/app/SellerRegisterCNPJ";
+import { SellerRegisterCNPJScreen as SellerRegisterScreen } from "../screens/app/SellerRegisterCNPJ";
 import { SellerRegisterStoreScreen } from "../screens/app/SellerRegisterStore";
 import { DeliveryMethodScreen } from "../screens/app/DeliveryMethod";
 import { PaymentMethodProfessionalScreen } from "../screens/app/Professional/PaymentMethodProfessional";
@@ -105,6 +106,8 @@ export type RootStackParamList = {
   PixPayment: undefined;
   MyContracts: undefined;
   ProfessionalRegistration: undefined;
+  ProfessionalRegistrationCNPJ: undefined;
+  ProfessionalDocTypeSelect: undefined;
   ProfessionalProfile: undefined;
   RegistrationAnalysis: undefined;
   ProfessionalArea: undefined;
@@ -112,7 +115,6 @@ export type RootStackParamList = {
   History: undefined;
   SellerRegister: undefined;
   SellerRegisterCPF: undefined;
-  SellerRegisterCNPJ: undefined;
   SellerRegisterStore: undefined;
   MyProductsFilled: undefined;
   EditProduct: undefined;
@@ -125,7 +127,7 @@ export type RootStackParamList = {
   Login: undefined;
   AddProductShippingScreen: undefined;
   AddProductShipping: undefined; // alias
-  PaymentGatewayRegistration: undefined;
+  PaymentGatewayRegistration: { context?: 'store' | 'professional' } | undefined;
   ProfessionalDocuments: undefined;
   ProductQuestions: undefined;
   SellerQuestionsListScreen: undefined;
@@ -180,7 +182,9 @@ export function Routes() {
         <Stack.Screen name="Address" component={AddressScreen}/>
         <Stack.Screen name="PixPayment" component={PixPaymentScreen}/>
         <Stack.Screen name="MyContracts" component={MyContractsScreen}/>
+        <Stack.Screen name="ProfessionalDocTypeSelect" component={ProfessionalDocTypeSelectScreen}/>
         <Stack.Screen name="ProfessionalRegistration" component={ProfessionalRegistrationScreen}/>
+        <Stack.Screen name="ProfessionalRegistrationCNPJ" component={ProfessionalRegistrationCNPJScreen}/>
         <Stack.Screen name="ProfessionalProfile" component={ProfessionalProfileScreen}/>
         <Stack.Screen name="RegistrationAnalysis" component={RegistrationAnalysisScreen}/>
         <Stack.Screen name="ProfessionalArea" component={ProfessionalAreaScreen}/>
@@ -188,7 +192,6 @@ export function Routes() {
         <Stack.Screen name="History" component={HistoryScreen}/>
         <Stack.Screen name="SellerRegister" component={SellerRegisterScreen}/>
         <Stack.Screen name="SellerRegisterCPF" component={SellerRegisterCPFScreen}/>
-        <Stack.Screen name="SellerRegisterCNPJ" component={SellerRegisterCNPJScreen}/>
         <Stack.Screen name="SellerRegisterStore" component={SellerRegisterStoreScreen}/>
         <Stack.Screen name="DeliveryMethod" component={DeliveryMethodScreen}/>
         <Stack.Screen name="EditProduct" component={EditProductScreen}/>

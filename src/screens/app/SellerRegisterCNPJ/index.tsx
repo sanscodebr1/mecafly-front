@@ -125,7 +125,7 @@ export function SellerRegisterCNPJScreen() {
         scrollEventThrottle={scrollEventThrottle}
       >
         <View style={styles.contentContainer}>
-          <Text style={styles.mainTitle}>Cadastro vendedor | CNPJ</Text>
+          <Text style={styles.mainTitle}>Cadastro vendedor</Text>
 
           <View style={styles.formContainer}>
             <InputField

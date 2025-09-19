@@ -32,7 +32,7 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   const sellerCtaLabel = isSeller ? 'Área do Vendedor' : 'Tornar-se um Vendedor';
-  const sellerCtaNavigateTo = isSeller ? 'SellerArea' : 'SellerRegistration';
+  const sellerCtaNavigateTo = isSeller ? 'SellerArea' : 'SellerRegister';
 
   const professionalCtaLabel = isProfessional ? 'Área do Profissional' : 'Tornar-se um Profissional';
   const professionalCtaNavigateTo = isProfessional ? 'ProfessionalArea' : 'ProfessionalRegistration';
@@ -197,7 +197,7 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
 
             <TouchableOpacity
               style={styles.menuOption}
-              onPress={() => navigation.navigate(isProfessional ? 'ProfessionalArea' as never : 'ProfessionalRegistration' as never)}
+              onPress={() => navigation.navigate(isProfessional ? 'ProfessionalArea' as never : 'ProfessionalDocTypeSelect' as never)}
             >
               <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
               <Text style={styles.menuOptionText}>

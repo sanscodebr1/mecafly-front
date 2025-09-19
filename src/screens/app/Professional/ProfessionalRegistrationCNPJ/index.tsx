@@ -22,7 +22,7 @@ import { uploadFileToSupabase } from '../../../../services/fileUpload';
 import { unmask } from '../../../../utils/masks';
 import { upsertProfessionalProfile } from '../../../../services/userProfiles';
 
-export function ProfessionalRegistrationScreen() {
+export function ProfessionalRegistrationCNPJScreen() {
   const navigation = useNavigation();
   const { user, refreshUserProfile, isProfessional, createProfessionalProfile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
@@ -32,35 +32,14 @@ export function ProfessionalRegistrationScreen() {
 
   const [formData, setFormData] = useState({
     nome: '',
-    cpf: '',
-    dataNascimento: '',
+    cnpj: '',
+    razaoSocial: '',
     telefone: '',
     documento: '', // caminho temporário do arquivo selecionado
   });
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const toISODate = (br: string | null) => {
-    if (!br) return null;
-    const trimmed = br.trim(); // remove espaços
-    const parts = trimmed.split('/');
-    if (parts.length !== 3) return null;
-
-    const [dd, mm, yyyy] = parts;
-    if (!dd || !mm || !yyyy) return null;
-
-    // valida se são números e dentro do range
-    const day = parseInt(dd, 10);
-    const month = parseInt(mm, 10);
-    const year = parseInt(yyyy, 10);
-
-    if (day < 1 || day > 31) return null;
-    if (month < 1 || month > 12) return null;
-    if (year < 1900 || year > 2100) return null;
-
-    return `${year}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
   };
 
   const handleContinue = async () => {
@@ -81,7 +60,7 @@ export function ProfessionalRegistrationScreen() {
       if (formData.documento) {
         documentoUrl = await uploadFileToSupabase(
           formData.documento,
-          'professional_profile', // Atualizado para a nova tabela
+          'professional_profile',
           `documents/doc_identi_${user.id}/`
         );
       }
@@ -104,13 +83,13 @@ export function ProfessionalRegistrationScreen() {
         user_type: 'professional',
         name: formData.nome || null,
         email: user.email || null,
-        document: unmask(formData.cpf) || null,
-        date_of_birth: formData.dataNascimento ? toISODate(formData.dataNascimento) : null,
+        document: unmask(formData.cnpj) || null,
+        date_of_birth: null, // CNPJ não tem data de nascimento
         phone_number: unmask(formData.telefone) || null,
         document_picture: documentoUrl,
         description: null,
-        legal_representative: null,
-        company_type: null,
+        legal_representative: formData.razaoSocial || null,
+        company_type: 'company',
         user_picture: null,
       });
 
@@ -122,7 +101,7 @@ export function ProfessionalRegistrationScreen() {
       // Atualizar contexto de autenticação
       await refreshUserProfile();
 
-      console.log('Cadastro profissional criado/atualizado com sucesso');
+      console.log('Cadastro profissional com CNPJ criado/atualizado com sucesso');
       navigation.navigate('ProfessionalProfile' as never);
       
     } catch (error) {
@@ -157,27 +136,27 @@ export function ProfessionalRegistrationScreen() {
 
         <View style={styles.formContainer}>
           <InputField
-            label="Nome"
+            label="Nome do representante legal"
             value={formData.nome}
             onChangeText={(value) => handleInputChange('nome', value)}
-            placeholder="Digite seu nome completo"
+            placeholder="Digite o nome do representante legal"
             autoCapitalize="words"
           />
 
           <MaskedInputField
-            label="CPF"
-            mask="cpf"
-            rawValue={formData.cpf}
-            onChangeRaw={(raw) => handleInputChange('cpf', raw)}
-            placeholder="000.000.000-00"
+            label="CNPJ"
+            mask="cnpj"
+            rawValue={formData.cnpj}
+            onChangeRaw={(raw) => handleInputChange('cnpj', raw)}
+            placeholder="00.000.000/0000-00"
           />
 
-          <MaskedInputField
-            label="Data de nascimento"
-            mask="date"
-            rawValue={formData.dataNascimento}
-            onChangeRaw={(raw) => handleInputChange('dataNascimento', raw)}
-            placeholder="DD/MM/AAAA"
+          <InputField
+            label="Razão social"
+            value={formData.razaoSocial}
+            onChangeText={(value) => handleInputChange('razaoSocial', value)}
+            placeholder="Digite a razão social da empresa"
+            autoCapitalize="words"
           />
 
           <MaskedInputField

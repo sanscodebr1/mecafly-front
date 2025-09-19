@@ -16,6 +16,8 @@ interface PaymentGatewayBannerProps {
   onPressRegister: () => void;
   onClose?: () => void;
   showCloseButton?: boolean;
+  context?: 'store' | 'professional';
+  document?: string;
 }
 
 export function PaymentGatewayBanner({
@@ -23,6 +25,8 @@ export function PaymentGatewayBanner({
   onPressRegister,
   onClose,
   showCloseButton = false,
+  context,
+  document,
 }: PaymentGatewayBannerProps) {
   const getBannerConfig = (status: AccountGatewayStatus | null) => {
     switch (status) {
@@ -30,7 +34,7 @@ export function PaymentGatewayBanner({
         return {
           backgroundColor: '#E6F4EA',
           textColor: '#1E7D43',
-          message: 'Conta de pagamento aprovada. Você já pode vender.',
+          message: 'Conta de pagamento aprovada. Complete a validação de identidade para começar a vender.',
           primaryCta: undefined,
           secondaryCta: 'Fazer validação',
           showClose: true,
@@ -85,7 +89,11 @@ export function PaymentGatewayBanner({
       );
 
       const { PaymentGatewayService } = await import('../services/paymentGateway');
-      const newLink = await PaymentGatewayService.getOrGenerateKycLink(accountGateway?.user_id || '');
+      const newLink = await PaymentGatewayService.getOrGenerateKycLink(
+        accountGateway?.user_id || '', 
+        document, 
+        context
+      );
 
       if (newLink) {
         Alert.alert(

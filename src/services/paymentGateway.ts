@@ -49,6 +49,38 @@ export type RegisterInformation = {
     reference_point?: string;
   };
   site_url?: string;
+  // Campos opcionais para adequação ao schema da PagarMe
+  main_address?: {
+    street: string;
+    street_number: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    complementary?: string;
+    reference_point?: string;
+  };
+  managing_partners?: Array<{
+    name: string;
+    document: string;
+    email?: string;
+    birthdate?: string;
+    mother_name?: string;
+    monthly_income?: number;
+    professional_occupation?: string;
+    self_declared_legal_representative?: boolean;
+    address?: {
+      street: string;
+      street_number: string;
+      neighborhood: string;
+      city: string;
+      state: string;
+      zip_code: string;
+      complementary?: string;
+      reference_point?: string;
+    };
+    phone_numbers?: PhoneNumber[];
+  }>;
 };
 
 // Tabela payment_gateway
@@ -126,8 +158,20 @@ export class PaymentGatewayService {
   }
 
   // Buscar conta gateway do usuário
-  static async getUserAccountGateway(userId: string): Promise<AccountGateway | null> {
+  static async getUserAccountGateway(userId: string, document?: string, context?: 'store' | 'professional'): Promise<AccountGateway | null> {
     try {
+      // Se tem documento e contexto, verificar se pode reutilizar conta existente
+      if (document && context) {
+        const reusableAccount = await this.canReuseExistingAccount(userId, document, context);
+
+        if (reusableAccount) {
+          return reusableAccount;
+        } else {
+          return null;
+        }
+      }
+
+      // Buscar conta mais recente do usuário (fallback para casos sem documento/contexto)
       const { data, error } = await supabase
         .from('account_gateway')
         .select('*')
@@ -171,38 +215,40 @@ export class PaymentGatewayService {
       }
     }
 
-    // Validação de nome
-    if (!data.name || data.name.trim().length < 2) {
-      errors.push('Nome deve ter pelo menos 2 caracteres');
-    }
-
-    // Validação de nome da mãe
-    if (!data.mother_name || data.mother_name.trim().length < 2) {
-      errors.push('Nome da mãe deve ter pelo menos 2 caracteres');
-    }
-
-    // Validação de data de nascimento
-    if (!data.birthdate) {
-      errors.push('Data de nascimento é obrigatória');
-    } else {
-      const birthDate = new Date(data.birthdate);
-      const today = new Date();
-      const age = today.getFullYear() - birthDate.getFullYear();
-      if (age < 18) {
-        errors.push('Idade mínima é 18 anos');
-      } else if (age > 100) {
-        errors.push('Data de nascimento inválida');
+    if (data.type === 'individual') {
+      // Validação de nome (pessoa física)
+      if (!data.name || data.name.trim().length < 2) {
+        errors.push('Nome deve ter pelo menos 2 caracteres');
       }
-    }
 
-    // Validação de renda mensal
-    if (!data.monthly_income || data.monthly_income <= 0) {
-      errors.push('Renda mensal deve ser maior que zero');
-    }
+      // Validação de nome da mãe
+      if (!data.mother_name || data.mother_name.trim().length < 2) {
+        errors.push('Nome da mãe deve ter pelo menos 2 caracteres');
+      }
 
-    // Validação de ocupação
-    if (!data.professional_occupation || data.professional_occupation.trim().length < 2) {
-      errors.push('Ocupação profissional deve ter pelo menos 2 caracteres');
+      // Validação de data de nascimento
+      if (!data.birthdate) {
+        errors.push('Data de nascimento é obrigatória');
+      } else {
+        const birthDate = new Date(data.birthdate);
+        const today = new Date();
+        const age = today.getFullYear() - birthDate.getFullYear();
+        if (age < 18) {
+          errors.push('Idade mínima é 18 anos');
+        } else if (age > 100) {
+          errors.push('Data de nascimento inválida');
+        }
+      }
+
+      // Validação de renda mensal
+      if (!data.monthly_income || data.monthly_income <= 0) {
+        errors.push('Renda mensal deve ser maior que zero');
+      }
+
+      // Validação de ocupação
+      if (!data.professional_occupation || data.professional_occupation.trim().length < 2) {
+        errors.push('Ocupação profissional deve ter pelo menos 2 caracteres');
+      }
     }
 
     // Validação de telefone
@@ -432,17 +478,28 @@ export class PaymentGatewayService {
     }, 60000);
 
     try {
-      console.log('Fazendo requisicao para PagarMe API');
+      const payload = {
+        register_information: {
+          ...registerInfo,
+          // Garantir que corporation tenha main_address e managing_partners
+          ...(registerInfo.type === 'corporation' ? {
+            main_address: registerInfo.main_address ?? registerInfo.address,
+            managing_partners: registerInfo.managing_partners ?? [],
+          } : {}),
+        },
+        default_bank_account: registerInfo.default_bank_account,
+      };
+
+      console.log('Fazendo requisicao pra PagarMe');
+      console.log('Payload completo:', JSON.stringify(payload, null, 2));
+
       const response = await fetch('https://api.pagar.me/core/v5/recipients', {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${basic}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          register_information: registerInfo,
-          default_bank_account: registerInfo.default_bank_account,
-        }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
 
@@ -457,6 +514,8 @@ export class PaymentGatewayService {
 
       const recipientData = await response.json();
       console.log('Recipient criado com sucesso:', recipientData);
+      console.log('Status do recipient:', recipientData.status);
+      console.log('Detalhes do KYC:', recipientData.kyc_details);
       return recipientData;
 
     } catch (error) {
@@ -515,6 +574,84 @@ export class PaymentGatewayService {
     }
   }
 
+  // Verificar se pode reutilizar conta existente baseada no CNPJ
+  static async canReuseExistingAccount(userId: string, document: string, context: 'store' | 'professional'): Promise<AccountGateway | null> {
+    try {
+      // Buscar todas as contas do usuário com os perfis relacionados
+      const { data: accounts, error } = await supabase
+        .from('account_gateway')
+        .select(`
+          *,
+          store_profile:store_profile_id(document),
+          professional_profile:professional_profile_id(document)
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao buscar contas existentes:', error);
+        return null;
+      }
+
+      console.log('Contas encontradas:', accounts?.length || 0);
+      accounts?.forEach((account, index) => {
+        console.log(`Conta ${index + 1}:`, {
+          id: account.id,
+          status: account.status,
+          store_profile_id: account.store_profile_id,
+          professional_profile_id: account.professional_profile_id,
+          store_document: account.store_profile?.document,
+          professional_document: account.professional_profile?.document
+        });
+      });
+
+      if (!accounts || accounts.length === 0) {
+        console.log('Nenhuma conta encontrada');
+        return null;
+      }
+
+      // Para store, buscar conta específica da store (com store_profile_id não nulo e professional_profile_id nulo)
+      if (context === 'store') {
+        const storeAccount = accounts.find(account =>
+          account.store_profile_id !== null &&
+          account.professional_profile_id === null &&
+          account.store_profile?.document === document
+        );
+        console.log('Conta da store encontrada:', storeAccount ? 'SIM' : 'NÃO');
+        if (storeAccount) {
+          console.log('Detalhes da conta da store:', {
+            id: storeAccount.id,
+            status: storeAccount.status,
+            store_profile_id: storeAccount.store_profile_id,
+            professional_profile_id: storeAccount.professional_profile_id
+          });
+        }
+        return storeAccount || null;
+      }
+
+      // Para professional, verificar se existe conta com mesmo documento E que seja específica para professional
+      const accountWithSameDocument = accounts.find(account => {
+        const profDocument = account.professional_profile?.document;
+        return profDocument === document && account.professional_profile_id !== null;
+      });
+
+      console.log('Conta do profissional encontrada:', accountWithSameDocument ? 'SIM' : 'NÃO');
+      if (accountWithSameDocument) {
+        console.log('Detalhes da conta do profissional:', {
+          id: accountWithSameDocument.id,
+          status: accountWithSameDocument.status,
+          professional_profile_id: accountWithSameDocument.professional_profile_id
+        });
+      }
+
+      // Se não encontrou conta específica do profissional com mesmo documento, retornar null (precisa criar nova)
+      return accountWithSameDocument || null;
+    } catch (error) {
+      console.error('Erro ao verificar reutilização de conta:', error);
+      return null;
+    }
+  }
+
   // Obter status detalhado da conta gateway
   static async getGatewayStatus(userId: string): Promise<{
     hasAccount: boolean;
@@ -525,7 +662,7 @@ export class PaymentGatewayService {
   }> {
     try {
       const accountGateway = await this.getUserAccountGateway(userId);
-      
+
       if (!accountGateway) {
         return {
           hasAccount: false,
@@ -562,6 +699,15 @@ export class PaymentGatewayService {
         return null;
       }
 
+      // Verificar se está no modo de teste (API key de teste)
+      const isTestMode = apiKey.startsWith('sk_test_');
+
+      if (isTestMode) {
+        console.log('Modo de teste detectado - simulando link KYC');
+        // No modo de teste, retornar um link simulado
+        return `https://www.pagar.me/kyc/teste`;
+      }
+
       // Usar btoa se disponível (web), senão usar Buffer (Node.js/React Native)
       const basic = typeof btoa !== 'undefined'
         ? btoa(`${apiKey}:`)
@@ -591,19 +737,26 @@ export class PaymentGatewayService {
         if (!response.ok) {
           const errorText = await response.text();
           console.log('Erro ao gerar link KYC:', response.status, errorText);
+
+          // Se for erro 403 no modo de teste, retornar link simulado
+          if (response.status === 403 && isTestMode) {
+            console.log('Erro 403 no modo de teste - retornando link simulado');
+            return `https://www.pagar.me/kyc/teste`;
+          }
+
           return null;
         }
 
         const linkData = await response.json();
         console.log('Link KYC gerado com sucesso:', linkData);
-        
+
         // Retornar URL do link KYC
         if (linkData.url) {
           // Garantir que a URL tenha protocolo HTTPS se necessário
           const url = linkData.url.startsWith('http') ? linkData.url : `https://${linkData.url}`;
           return url;
         }
-        
+
         return null;
 
       } catch (error) {
@@ -624,10 +777,10 @@ export class PaymentGatewayService {
   }
 
   // Obter ou gerar link de KYC para o usuário
-  static async getOrGenerateKycLink(userId: string): Promise<string | null> {
+  static async getOrGenerateKycLink(userId: string, document?: string, context?: 'store' | 'professional'): Promise<string | null> {
     try {
-      const accountGateway = await this.getUserAccountGateway(userId);
-      
+      const accountGateway = await this.getUserAccountGateway(userId, document, context);
+
       if (!accountGateway) {
         console.log('Usuário não tem conta gateway configurada');
         return null;
@@ -642,14 +795,14 @@ export class PaymentGatewayService {
       // Se não tem, gerar um novo link
       console.log('Gerando novo link de KYC para recipient:', accountGateway.external_id);
       const newLink = await this.generateKycLink(accountGateway.external_id);
-      
+
       if (newLink) {
         // Atualizar o affiliation_url no banco
         await supabase
           .from('account_gateway')
           .update({ affiliation_url: newLink })
           .eq('external_id', accountGateway.external_id);
-        
+
         console.log('Link de KYC atualizado no banco de dados');
       }
 

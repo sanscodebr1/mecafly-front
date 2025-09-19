@@ -30,6 +30,7 @@ export function SellerAreaScreen() {
   const [storeStatus, setStoreStatus] = useState<string | null>(null);
   const [accountGateway, setAccountGateway] = useState<AccountGateway | null>(null);
   const [showPaymentBanner, setShowPaymentBanner] = useState(true);
+  const [storeDocument, setStoreDocument] = useState<string | null>(null);
   const [gatewayStatus, setGatewayStatus] = useState<{
     hasAccount: boolean;
     status: 'pending' | 'approved' | 'refused' | null;
@@ -62,11 +63,39 @@ export function SellerAreaScreen() {
 
     const fetchAccountGateway = async () => {
       if (!user?.id) return;
-      console.log('Buscando conta gateway para usuário:', user.id);
-      const gateway = await PaymentGatewayService.getUserAccountGateway(user.id);
-      const status = await PaymentGatewayService.getGatewayStatus(user.id);
-      console.log('Conta gateway encontrada:', gateway);
-      console.log('Status gateway:', status);
+      
+      // Buscar dados da store para usar no contexto
+      const { data: storeData } = await supabase
+        .from('store_profile')
+        .select('document')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      setStoreDocument(storeData?.document || null);
+      
+      const gateway = await PaymentGatewayService.getUserAccountGateway(
+        user.id, 
+        storeData?.document || undefined, 
+        'store'
+      );
+      
+      console.log('Gateway encontrado:', {
+        id: gateway?.id,
+        status: gateway?.status,
+        store_profile_id: gateway?.store_profile_id,
+        professional_profile_id: gateway?.professional_profile_id,
+        external_id: gateway?.external_id
+      });
+      
+      // Calcular status baseado na conta gateway encontrada
+      const status = {
+        hasAccount: gateway !== null,
+        status: gateway?.status || null,
+        canSell: gateway?.status === 'approved',
+        needsKYC: gateway?.status !== 'approved',
+        affiliationUrl: gateway?.affiliation_url,
+      };
+      
       setAccountGateway(gateway);
       setGatewayStatus(status);
     };
@@ -156,7 +185,7 @@ export function SellerAreaScreen() {
 
   const handlePaymentGatewayPress = () => {
     console.log('Navegando para PaymentGatewayRegistration');
-    navigation.navigate('PaymentGatewayRegistration' as never);
+    (navigation as any).navigate('PaymentGatewayRegistration', { context: 'store' });
   };
 
   const handleClosePaymentBanner = () => {
@@ -187,6 +216,8 @@ export function SellerAreaScreen() {
           onPressRegister={handlePaymentGatewayPress}
           onClose={handleClosePaymentBanner}
           showCloseButton={accountGateway?.status === 'approved'}
+          context="store"
+          document={storeDocument || undefined}
         />
       )}
 
