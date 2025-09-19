@@ -61,6 +61,7 @@ import { AddProductShippingScreen } from "../screens/app/AddProductShipping";
 import { UserAddress } from '../services/userAddress';
 import { MyPurchasesScreen } from "../screens/app/MyPurchases";
 import { PurchaseDetailScreen } from "../screens/app/PurchaseDetails";
+import { CreditCardPaymentConfirmationScreen } from "../screens/app/CreditCardPaymentConfirmation";
 
 
 
@@ -124,6 +125,7 @@ export type RootStackParamList = {
   AddProductShippingScreen: undefined;
   MyPurchasesScreen: undefined;
   PurchaseDetailScreen: undefined;
+  CreditCardPaymentConfirmationScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -197,6 +199,7 @@ return(
             <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen} />
             <Stack.Screen name="MyPurchases" component={MyPurchasesScreen} />
             <Stack.Screen name="PurchaseDetails" component={PurchaseDetailScreen} />
+            <Stack.Screen name="CreditCardPaymentConfirmation" component={CreditCardPaymentConfirmationScreen} />
 
         </Stack.Navigator>
 

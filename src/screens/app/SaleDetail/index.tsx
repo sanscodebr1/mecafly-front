@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -20,11 +21,14 @@ import { SimpleHeader } from '../../../components/SimpleHeader';
 import { 
   getSaleDetails, 
   updateSaleStatus,
+  getShippingDetails,
   StoreSale, 
+  ShippingDetail,
   statusLabels, 
   statusColors,
   paymentMethodLabels 
 } from '../../../services/salesStore';
+import { generateShippingLabel } from '../../../services/shippingService';
 
 // Tipos de navegação
 type RootStackParamList = {
@@ -51,11 +55,13 @@ export function SaleDetailScreen() {
   const { saleId } = route.params;
   
   const [sale, setSale] = useState<StoreSale | null>(null);
+  const [shippingDetails, setShippingDetails] = useState<ShippingDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [generatingLabel, setGeneratingLabel] = useState<string | null>(null);
 
-  // Buscar detalhes da venda
+  // Buscar detalhes da venda e frete
   const fetchSaleDetails = async () => {
     try {
       setLoading(true);
@@ -66,6 +72,12 @@ export function SaleDetailScreen() {
       if (saleData) {
         console.log('Dados da venda carregados:', saleData);
         setSale(saleData);
+        
+        // Buscar detalhes do frete
+        if (saleData.purchase_id) {
+          const shippingData = await getShippingDetails(saleData.purchase_id);
+          setShippingDetails(shippingData);
+        }
       } else {
         console.log('Venda não encontrada');
         Alert.alert('Erro', 'Venda não encontrada', [
@@ -123,6 +135,108 @@ export function SaleDetailScreen() {
       );
     } else {
       setDropdownOpen(false);
+    }
+  };
+
+  // Função atualizada para lidar com geração de etiqueta
+  const handleGenerateLabel = async (shippingId: string) => {
+    // Find the shipping detail to get the external_shipment_id
+    const shippingDetail = shippingDetails.find(detail => detail.id.toString() === shippingId);
+    
+    if (!shippingDetail?.external_shipment_id) {
+      Alert.alert(
+        'Erro',
+        'ID do envio não encontrado. Não é possível gerar a etiqueta.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      setGeneratingLabel(shippingId);
+      console.log('Gerando etiqueta para shipment:', shippingDetail.external_shipment_id);
+
+      const result = await generateShippingLabel(shippingDetail.external_shipment_id);
+
+      if (result.success && result.pdfUrl) {
+        // Update local state with the new label URL
+        setShippingDetails(prevDetails =>
+          prevDetails.map(detail =>
+            detail.id.toString() === shippingId
+              ? { ...detail, label_url: result.pdfUrl }
+              : detail
+          )
+        );
+
+        // Try to open the PDF
+        const canOpen = await Linking.canOpenURL(result.pdfUrl);
+        
+        if (canOpen) {
+          Alert.alert(
+            'Etiqueta Gerada',
+            'A etiqueta foi gerada com sucesso! Deseja abrir o arquivo PDF?',
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              { 
+                text: 'Abrir PDF', 
+                onPress: () => Linking.openURL(result.pdfUrl!) 
+              }
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Etiqueta Gerada',
+            'A etiqueta foi gerada com sucesso, mas não foi possível abrir automaticamente. Você pode acessar o link: ' + result.pdfUrl,
+            [{ text: 'OK' }]
+          );
+        }
+      } else if (result.needsGeneration) {
+        // Solicitação de geração foi enviada
+        Alert.alert(
+          'Solicitação Enviada',
+          result.error || 'A solicitação de etiqueta foi enviada! Aguarde 1 minuto e tente novamente.',
+          [
+            { text: 'OK' }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Erro ao Gerar Etiqueta',
+          result.error || 'Erro desconhecido ao gerar a etiqueta.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao gerar etiqueta:', error);
+      Alert.alert(
+        'Erro',
+        'Ocorreu um erro inesperado ao gerar a etiqueta. Tente novamente mais tarde.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setGeneratingLabel(null);
+    }
+  };
+
+  const handleOpenLabel = async (labelUrl: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(labelUrl);
+      if (canOpen) {
+        await Linking.openURL(labelUrl);
+      } else {
+        Alert.alert(
+          'Link da Etiqueta',
+          'Não foi possível abrir automaticamente. Link: ' + labelUrl,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao abrir etiqueta:', error);
+      Alert.alert(
+        'Erro',
+        'Não foi possível abrir a etiqueta.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -286,10 +400,70 @@ export function SaleDetailScreen() {
             </View>
           </View>
 
+          {/* Shipping Details */}
+          {shippingDetails.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>Informações de Frete:</Text>
+              {shippingDetails.map((shipping, index) => (
+                <View key={index} style={styles.card}>
+                  <Text style={styles.cardLine}>
+                    <Text style={styles.cardLabel}>Transportadora:</Text> {shipping.carrier}
+                  </Text>
+                  <Text style={styles.cardLine}>
+                    <Text style={styles.cardLabel}>Status do Envio:</Text> {shipping.status}
+                  </Text>
+                  <Text style={styles.cardLine}>
+                    <Text style={styles.cardLabel}>Valor do Frete:</Text> {formatPrice(shipping.shipping_fee)}
+                  </Text>
+                  <Text style={styles.cardLine}>
+                    <Text style={styles.cardLabel}>Código de Rastreio:</Text> {shipping.tracking_code || 'Ainda não gerado'}
+                  </Text>
+                  
+                  {/* Generate/Open Label Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.labelButton,
+                      (!shipping.external_shipment_id) && styles.labelButtonDisabled
+                    ]}
+                    onPress={() => {
+                      if (shipping.label_url) {
+                        handleOpenLabel(shipping.label_url);
+                      } else {
+                        handleGenerateLabel(shipping.id.toString());
+                      }
+                    }}
+                    disabled={!shipping.external_shipment_id || generatingLabel === shipping.id.toString()}
+                  >
+                    {generatingLabel === shipping.id.toString() ? (
+                      <View style={styles.labelButtonLoading}>
+                        <ActivityIndicator size="small" color="#fff" />
+                        <Text style={[styles.labelButtonText, { marginLeft: wp('2%') }]}>
+                          Processando...
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[
+                        styles.labelButtonText,
+                        (!shipping.external_shipment_id) && styles.labelButtonTextDisabled
+                      ]}>
+                        {shipping.label_url ? 'Abrir Etiqueta' : 'Gerar Etiqueta'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {!shipping.external_shipment_id && (
+                    <Text style={styles.warningText}>
+                      * Etiqueta não disponível - Envio não processado pelo sistema
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </>
+          )}
+
           {/* Buyer Details */}
           <Text style={styles.sectionTitle}>Detalhes do comprador:</Text>
           <View style={styles.card}>
-
             <Text style={styles.cardLine}>
               <Text style={styles.cardLabel}>Endereço:</Text> {sale.customer_address}
             </Text>
@@ -588,6 +762,46 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       fontSize: wp('2.8%'),
       lineHeight: wp('3.8%'),
+    }),
+  },
+  labelButton: {
+    backgroundColor: '#22D883',
+    borderRadius: wp('2%'),
+    paddingVertical: hp('1.2%'),
+    paddingHorizontal: wp('4%'),
+    marginTop: hp('1%'),
+    alignItems: 'center',
+    ...(isWeb && {
+      paddingVertical: hp('1%'),
+      paddingHorizontal: wp('3%'),
+    }),
+  },
+  labelButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  labelButtonText: {
+    color: '#fff',
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.semiBold600,
+    ...(isWeb && {
+      fontSize: wp('2.8%'),
+    }),
+  },
+  labelButtonTextDisabled: {
+    color: '#999',
+  },
+  labelButtonLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  warningText: {
+    fontSize: wp('3%'),
+    fontFamily: fonts.regular400,
+    color: '#FF6B35',
+    marginTop: hp('0.5%'),
+    fontStyle: 'italic',
+    ...(isWeb && {
+      fontSize: wp('2.5%'),
     }),
   },
   dropdownOverlay: {
