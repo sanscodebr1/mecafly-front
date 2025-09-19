@@ -39,6 +39,7 @@ import { MyContractsScreen } from "../screens/app/MyContracts";
 import { ProfessionalRegistrationScreen } from "../screens/app/Professional/ProfessionalRegistration";
 import { ProfessionalRegistrationCNPJScreen } from "../screens/app/Professional/ProfessionalRegistrationCNPJ";
 import { ProfessionalDocTypeSelectScreen } from "../screens/app/Professional/ProfessionalDocTypeSelect";
+import { ProfessionalEquipmentSelectScreen } from "../screens/app/Professional/ProfessionalEquipmentSelect";
 import { ProfessionalProfileScreen } from "../screens/app/Professional/ProfessionalProfile";
 import { RegistrationAnalysisScreen } from "../screens/app/Professional/RegistrationAnalysis";
 import { ProfessionalAreaScreen } from "../screens/app/Professional/ProfessionalArea";
@@ -108,6 +109,7 @@ export type RootStackParamList = {
   ProfessionalRegistration: undefined;
   ProfessionalRegistrationCNPJ: undefined;
   ProfessionalDocTypeSelect: undefined;
+  ProfessionalEquipmentSelect: undefined;
   ProfessionalProfile: undefined;
   RegistrationAnalysis: undefined;
   ProfessionalArea: undefined;
@@ -182,6 +184,7 @@ export function Routes() {
         <Stack.Screen name="Address" component={AddressScreen}/>
         <Stack.Screen name="PixPayment" component={PixPaymentScreen}/>
         <Stack.Screen name="MyContracts" component={MyContractsScreen}/>
+        <Stack.Screen name="ProfessionalEquipmentSelect" component={ProfessionalEquipmentSelectScreen}/>
         <Stack.Screen name="ProfessionalDocTypeSelect" component={ProfessionalDocTypeSelectScreen}/>
         <Stack.Screen name="ProfessionalRegistration" component={ProfessionalRegistrationScreen}/>
         <Stack.Screen name="ProfessionalRegistrationCNPJ" component={ProfessionalRegistrationCNPJScreen}/>

@@ -36,6 +36,7 @@ export function ProfessionalRegistrationScreen() {
     dataNascimento: '',
     telefone: '',
     documento: '', // caminho temporário do arquivo selecionado
+    hasEquipment: false, // Profissionais com CPF não têm equipamento próprio
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -112,6 +113,7 @@ export function ProfessionalRegistrationScreen() {
         legal_representative: null,
         company_type: null,
         user_picture: null,
+        has_equipment: formData.hasEquipment,
       });
 
       if (!updatedProfile) {

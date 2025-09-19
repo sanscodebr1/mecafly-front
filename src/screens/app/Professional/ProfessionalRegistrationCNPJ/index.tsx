@@ -36,6 +36,7 @@ export function ProfessionalRegistrationCNPJScreen() {
     razaoSocial: '',
     telefone: '',
     documento: '', // caminho temporário do arquivo selecionado
+    hasEquipment: true, // Profissionais com CNPJ têm equipamento próprio
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -91,6 +92,7 @@ export function ProfessionalRegistrationCNPJScreen() {
         legal_representative: formData.razaoSocial || null,
         company_type: 'company',
         user_picture: null,
+        has_equipment: formData.hasEquipment,
       });
 
       if (!updatedProfile) {

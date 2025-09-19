@@ -218,7 +218,7 @@ export function SideMenu({ isVisible, onClose }: SideMenuProps) {
                 
                 <TouchableOpacity 
                   style={styles.gradientButton} 
-                  onPress={()=> navigation.navigate('ProfessionalDocTypeSelect' as never)}
+                  onPress={()=> navigation.navigate('ProfessionalEquipmentSelect' as never)}
                 >
                   <LinearGradient
                     colors={['#000000', Colors.primaryRed]}

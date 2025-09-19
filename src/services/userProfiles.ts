@@ -33,6 +33,7 @@ export type ProfessionalProfile = {
   description?: string | null;
   legal_representative?: string | null;
   company_type?: CompanyTypeEnum | null;
+  has_equipment?: boolean | null;
 };
 
 export type StoreProfile = {

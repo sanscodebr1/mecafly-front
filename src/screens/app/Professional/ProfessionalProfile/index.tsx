@@ -55,10 +55,6 @@ export function ProfessionalProfileScreen() {
   const [professionalProfile, setProfessionalProfile] = useState<any>(null);
 
   const crops = ['Milho', 'Soja', 'Café'];
-  const equipamento = [
-    { id: 1, label: 'Sim', bool: true },
-    { id: 2, label: 'Não', bool: false },
-  ];
 
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
 
@@ -97,6 +93,11 @@ export function ProfessionalProfileScreen() {
           ...prev, 
           descricao: currentProfessionalProfile.description || '' 
         }));
+      }
+
+      // Carregar status do equipamento do perfil profissional
+      if (currentProfessionalProfile.has_equipment !== null && currentProfessionalProfile.has_equipment !== undefined) {
+        setTemEquipamento(currentProfessionalProfile.has_equipment);
       }
 
       // Carregar valores de atributos existentes
@@ -251,6 +252,14 @@ export function ProfessionalProfileScreen() {
         await upsertProfessionalProfile({
           ...professionalProfile,
           description: formData.descricao.trim(),
+        });
+      }
+
+      // Salvar status do equipamento no perfil profissional
+      if (temEquipamento !== null) {
+        await upsertProfessionalProfile({
+          ...professionalProfile,
+          has_equipment: temEquipamento,
         });
       }
 
@@ -433,31 +442,7 @@ export function ProfessionalProfileScreen() {
           </View>
         </View>
 
-        {/* Equipamento próprio */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tem equipamento próprio:</Text>
-          <View style={styles.rentalOptionsContainer}>
-            {equipamento.map(opt => (
-              <TouchableOpacity
-                key={opt.id}
-                style={[
-                  styles.rentalPill,
-                  temEquipamento === opt.bool && styles.rentalPillSelected
-                ]}
-                onPress={() => setTemEquipamento(opt.bool)}
-              >
-                <Text style={[
-                  styles.rentalPillText,
-                  temEquipamento === opt.bool && styles.rentalPillTextSelected
-                ]}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Características só se "Sim" */}
+        {/* Características do equipamento */}
         {temEquipamento && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Quais as características do seu equipamento?</Text>

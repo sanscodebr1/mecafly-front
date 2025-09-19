@@ -17,6 +17,9 @@ import { Colors as colors } from '../../../constants/colors';
 export function KycTestScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [selectedContext, setSelectedContext] = useState<'store' | 'professional'>(() => {
+    return (user as any)?.store_profile?.document ? 'store' : 'professional';
+  });
   const [testResults, setTestResults] = useState<{
     success: boolean;
     steps: string[];
@@ -28,11 +31,29 @@ export function KycTestScreen() {
     loadGatewayStatus();
   }, []);
 
-  const loadGatewayStatus = async () => {
+  const loadGatewayStatus = async (ctx?: 'store' | 'professional') => {
     if (!user?.id) return;
 
     try {
-      const status = await PaymentGatewayService.getGatewayStatus(user.id);
+      const contextToUse = ctx ?? selectedContext;
+      const storeDoc = (user as any)?.store_profile?.document || undefined;
+      const profDoc = (user as any)?.professional_profile?.document || undefined;
+      const document = contextToUse === 'store' ? storeDoc : profDoc;
+
+      const account = await PaymentGatewayService.getUserAccountGateway(
+        user.id,
+        document,
+        contextToUse
+      );
+
+      const status = {
+        hasAccount: !!account,
+        status: account?.status ?? null,
+        canSell: account?.status === 'approved',
+        needsKYC: (account?.status ?? null) !== 'approved',
+        affiliationUrl: account?.affiliation_url,
+      };
+
       setGatewayStatus(status);
     } catch (error) {
       console.error('Erro ao carregar status gateway:', error);
@@ -140,7 +161,14 @@ export function KycTestScreen() {
 
     setLoading(true);
     try {
-      const link = await PaymentGatewayService.getOrGenerateKycLink(user.id);
+      const storeDoc = (user as any)?.store_profile?.document || undefined;
+      const profDoc = (user as any)?.professional_profile?.document || undefined;
+      const document = selectedContext === 'store' ? storeDoc : profDoc;
+      const link = await PaymentGatewayService.getOrGenerateKycLink(
+        user.id,
+        document,
+        selectedContext
+      );
       if (link) {
         Alert.alert(
           'Link gerado!',
@@ -183,6 +211,27 @@ export function KycTestScreen() {
       <SimpleHeader title="Teste de KYC" />
       
       <ScrollView style={styles.content}>
+        {/* Contexto */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Contexto</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              style={[styles.button, selectedContext === 'store' ? styles.primaryButton : styles.secondaryButton]}
+              onPress={() => { setSelectedContext('store'); loadGatewayStatus('store'); }}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>Store</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, selectedContext === 'professional' ? styles.primaryButton : styles.secondaryButton]}
+              onPress={() => { setSelectedContext('professional'); loadGatewayStatus('professional'); }}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>Professional</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Status Atual */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Status atual</Text>

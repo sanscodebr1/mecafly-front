@@ -197,7 +197,7 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
 
             <TouchableOpacity
               style={styles.menuOption}
-              onPress={() => navigation.navigate(isProfessional ? 'ProfessionalArea' as never : 'ProfessionalDocTypeSelect' as never)}
+              onPress={() => navigation.navigate(isProfessional ? 'ProfessionalArea' as never : 'ProfessionalEquipmentSelect' as never)}
             >
               <Image style={styles.navIcon} source={require('../assets/icons/persongray.png')} />
               <Text style={styles.menuOptionText}>
