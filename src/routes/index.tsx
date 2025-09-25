@@ -67,6 +67,8 @@ import { UserAddress } from '../services/userAddress';
 import { MyPurchasesScreen } from "../screens/app/MyPurchases";
 import { PurchaseDetailScreen } from "../screens/app/PurchaseDetails";
 import { KycTestScreen } from "../screens/app/KycTest";
+import { CreditCardPaymentConfirmationScreen } from "../screens/app/CreditCardPaymentConfirmation";
+import { BoletoPaymentScreen } from "../screens/app/BoletoPayment";
 
 // Enable native screens
 enableScreens();
@@ -136,6 +138,8 @@ export type RootStackParamList = {
   MyPurchasesScreen: undefined;
   PurchaseDetailScreen: { purchaseId: string };
   KycTest: undefined;
+  CreditCardPaymentConfirmationScreen: undefined;
+  BoletoPaymentScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -214,6 +218,8 @@ export function Routes() {
         <Stack.Screen name="MyPurchasesScreen" component={MyPurchasesScreen}/>
         <Stack.Screen name="PurchaseDetailScreen" component={PurchaseDetailScreen}/>
         <Stack.Screen name="KycTest" component={KycTestScreen}/>
+        <Stack.Screen name="CreditCardPaymentConfirmationScreen" component={CreditCardPaymentConfirmationScreen} />
+        <Stack.Screen name="BoletoPaymentScreen" component={BoletoPaymentScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

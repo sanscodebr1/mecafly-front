@@ -30,6 +30,20 @@ export interface StoreSale {
   shipping_fee: number;
 }
 
+export interface ShippingDetail {
+  id: number;
+  product_id: number;
+  purchase_id: number;
+  carrier: string;
+  status: string;
+  tracking_code: string | null;
+  shipping_fee: number;
+  label_url: string | null;
+  external_shipment_id: string;
+  external_service_id: string;
+  external_protocol: string;
+}
+
 export interface SalesFilters {
   status?: string;
   searchQuery?: string;
@@ -205,5 +219,32 @@ export async function updateSaleStatus(
   } catch (error) {
     console.error('Erro ao atualizar status da venda:', error);
     return false;
+  }
+}
+
+// NOVA FUNÇÃO: Buscar detalhes do frete de uma compra
+export async function getShippingDetails(purchaseId: string): Promise<ShippingDetail[]> {
+  try {
+    if (!purchaseId) {
+      console.log('Purchase ID não fornecido');
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from('purchase_shipment')
+      .select('*')
+      .eq('purchase_id', purchaseId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Erro ao buscar detalhes do frete:', error);
+      return [];
+    }
+
+    console.log(`Encontrados ${data?.length || 0} registros de frete para purchase_id: ${purchaseId}`);
+    return data || [];
+  } catch (error) {
+    console.error('Erro ao buscar detalhes do frete:', error);
+    return [];
   }
 }

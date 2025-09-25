@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -17,14 +18,19 @@ import type { RouteProp } from '@react-navigation/native';
 import { fonts } from '../../../constants/fonts';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
 import { SimpleHeader } from '../../../components/SimpleHeader';
-import { 
-  getSaleDetails, 
+import {
+  getSaleDetails,
   updateSaleStatus,
-  StoreSale, 
-  statusLabels, 
+  getShippingDetails,
+  StoreSale,
+  ShippingDetail,
+  statusLabels,
   statusColors,
-  paymentMethodLabels 
+  paymentMethodLabels
 } from '../../../services/salesStore';
+import { generateShippingLabel, payShippingLabelsForPurchase } from '../../../services/shippingService';
+import { cancelSalePayment } from '../../../services/paymentService';
+import { supabase } from '../../../lib/supabaseClient';
 
 // Tipos de navegação
 type RootStackParamList = {
@@ -49,23 +55,36 @@ export function SaleDetailScreen() {
   const navigation = useNavigation<SaleDetailScreenNavigationProp>();
   const route = useRoute<SaleDetailScreenRouteProp>();
   const { saleId } = route.params;
-  
+
   const [sale, setSale] = useState<StoreSale | null>(null);
+  const [shippingDetails, setShippingDetails] = useState<ShippingDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [generatingLabel, setGeneratingLabel] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<'accept' | 'cancel' | null>(null);
 
-  // Buscar detalhes da venda
+  // Buscar detalhes da venda e frete
   const fetchSaleDetails = async () => {
     try {
       setLoading(true);
       console.log('Buscando detalhes da venda:', saleId);
-      
+
       const saleData = await getSaleDetails(saleId);
-      
+
       if (saleData) {
         console.log('Dados da venda carregados:', saleData);
         setSale(saleData);
+
+        // Buscar detalhes do frete SOMENTE se a venda estiver em processamento ou posterior
+        if (saleData.purchase_id && ['processing', 'transport', 'delivered'].includes(saleData.status)) {
+          console.log('Carregando detalhes do frete...');
+          const shippingData = await getShippingDetails(saleData.purchase_id);
+          setShippingDetails(shippingData);
+        } else {
+          console.log('Não carregando frete - status:', saleData.status);
+          setShippingDetails([]); // Limpar detalhes de frete
+        }
       } else {
         console.log('Venda não encontrada');
         Alert.alert('Erro', 'Venda não encontrada', [
@@ -82,19 +101,115 @@ export function SaleDetailScreen() {
     }
   };
 
-  // Atualizar status da venda
+  // Aceitar venda
+  const handleAcceptSale = async () => {
+    if (!sale) return;
+
+    Alert.alert(
+      'Confirmar Venda',
+      'Ao aceitar esta venda, as etiquetas serão confirmadas e o pedido será processado. Esta ação não pode ser desfeita. Deseja continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Aceitar Venda',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setActionLoading('accept');
+
+              // 1. Pagar etiquetas de frete usando a função do shippingService
+              console.log('Pagando etiquetas para purchase:', sale.purchase_id);
+              const paymentResult = await payShippingLabelsForPurchase(sale.purchase_id);
+              
+              if (!paymentResult.success) {
+                Alert.alert('Erro', paymentResult.error || 'Erro ao pagar etiquetas de frete');
+                return;
+              }
+
+              // 2. Atualizar status da venda para processing
+              const statusResult = await updateSaleStatus(sale.sale_id, 'processing');
+              if (!statusResult) {
+                Alert.alert('Erro', 'Erro ao atualizar status da venda');
+                return;
+              }
+
+              Alert.alert('Sucesso', 'Venda aceita com sucesso! As etiquetas foram confirmadas!');
+              // Recarregar os dados da venda
+              await fetchSaleDetails();
+            } catch (error) {
+              console.error('Erro ao aceitar venda:', error);
+              Alert.alert('Erro', `Erro inesperado: ${error instanceof Error ? error.message : error}`);
+            } finally {
+              setActionLoading(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Cancelar venda
+  const handleCancelSale = async () => {
+    if (!sale) return;
+
+    Alert.alert(
+      'Cancelar Venda',
+      'Ao cancelar esta venda, o pagamento será estornado para o cliente. Esta ação não pode ser desfeita. Deseja continuar?',
+      [
+        { text: 'Não Cancelar', style: 'cancel' },
+        {
+          text: 'Cancelar Venda',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoading('cancel');
+
+              // 1. Cancelar pagamento na Pagarme usando a função do paymentService
+              console.log('Cancelando pagamento:', sale.gateway_order_id);
+              const cancelResult = await cancelSalePayment(sale.gateway_order_id);
+              
+              if (!cancelResult.success) {
+                Alert.alert('Erro', cancelResult.error || 'Erro ao cancelar pagamento');
+                return;
+              }
+
+              // 2. Atualizar status da venda para canceled
+              const statusResult = await updateSaleStatus(sale.sale_id, 'canceled');
+              if (!statusResult) {
+                Alert.alert('Erro', 'Erro ao atualizar status da venda');
+                return;
+              }
+
+              Alert.alert('Venda Cancelada', 'A venda foi cancelada e o pagamento será estornado para o cliente.');
+              // Recarregar os dados da venda
+              await fetchSaleDetails();
+            } catch (error) {
+              console.error('Erro ao cancelar venda:', error);
+              Alert.alert('Erro', `Erro inesperado: ${error instanceof Error ? error.message : error}`);
+            } finally {
+              setActionLoading(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Atualizar status da venda (dropdown)
   const handleStatusUpdate = async (newStatus: StoreSale['status']) => {
     if (!sale) return;
-    
+
     try {
       setUpdatingStatus(true);
       console.log('Atualizando status para:', newStatus);
-      
+
       const success = await updateSaleStatus(sale.sale_id, newStatus);
-      
+
       if (success) {
         setSale({ ...sale, status: newStatus });
         Alert.alert('Sucesso', 'Status da venda atualizado com sucesso!');
+        // Recarregar detalhes para atualizar seção de frete se necessário
+        await fetchSaleDetails();
       } else {
         Alert.alert('Erro', 'Não foi possível atualizar o status da venda');
       }
@@ -126,6 +241,102 @@ export function SaleDetailScreen() {
     }
   };
 
+  // Gerar etiqueta
+  const handleGenerateLabel = async (shippingId: string) => {
+    const shippingDetail = shippingDetails.find(detail => detail.id.toString() === shippingId);
+
+    if (!shippingDetail?.external_shipment_id) {
+      Alert.alert(
+        'Erro',
+        'ID do envio não encontrado. Não é possível gerar a etiqueta.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      setGeneratingLabel(shippingId);
+      console.log('Gerando etiqueta para shipment:', shippingDetail.external_shipment_id);
+
+      const result = await generateShippingLabel(shippingDetail.external_shipment_id);
+
+      if (result.success && result.pdfUrl) {
+        setShippingDetails(prevDetails =>
+          prevDetails.map(detail =>
+            detail.id.toString() === shippingId
+              ? { ...detail, label_url: result.pdfUrl }
+              : detail
+          )
+        );
+
+        const canOpen = await Linking.canOpenURL(result.pdfUrl);
+
+        if (canOpen) {
+          Alert.alert(
+            'Etiqueta Gerada',
+            'A etiqueta foi gerada com sucesso! Deseja abrir o arquivo PDF?',
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              {
+                text: 'Abrir PDF',
+                onPress: () => Linking.openURL(result.pdfUrl!)
+              }
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Etiqueta Gerada',
+            'A etiqueta foi gerada com sucesso, mas não foi possível abrir automaticamente. Você pode acessar o link: ' + result.pdfUrl,
+            [{ text: 'OK' }]
+          );
+        }
+      } else if (result.needsGeneration) {
+        Alert.alert(
+          'Solicitação Enviada',
+          result.error || 'A solicitação de etiqueta foi enviada! Aguarde 1 minuto e tente novamente.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Erro ao Gerar Etiqueta',
+          result.error || 'Erro desconhecido ao gerar a etiqueta.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao gerar etiqueta:', error);
+      Alert.alert(
+        'Erro',
+        'Ocorreu um erro inesperado ao gerar a etiqueta. Tente novamente mais tarde.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setGeneratingLabel(null);
+    }
+  };
+
+  const handleOpenLabel = async (labelUrl: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(labelUrl);
+      if (canOpen) {
+        await Linking.openURL(labelUrl);
+      } else {
+        Alert.alert(
+          'Link da Etiqueta',
+          'Não foi possível abrir automaticamente. Link: ' + labelUrl,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao abrir etiqueta:', error);
+      Alert.alert(
+        'Erro',
+        'Não foi possível abrir a etiqueta.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
   // Formatadores
   const formatPrice = (price: number) => {
     return `R$ ${(price / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
@@ -154,6 +365,57 @@ export function SaleDetailScreen() {
       return `ou ${sale.installment}x de ${formatPrice(installmentValue)} sem juros`;
     }
     return 'À vista';
+  };
+
+  // Renderizar botões de ação fixos no final - SOMENTE aparece quando status é 'paid'
+  const renderFixedActionButtons = () => {
+    if (!sale || sale.status !== 'paid') {
+      return null;
+    }
+
+    return (
+      <View style={styles.fixedButtonsContainer}>
+        <TouchableOpacity
+          style={[
+            styles.fixedActionButton,
+            styles.cancelButton,
+            actionLoading !== null && styles.fixedActionButtonDisabled
+          ]}
+          onPress={handleCancelSale}
+          disabled={actionLoading !== null}
+          activeOpacity={0.8}
+        >
+          {actionLoading === 'cancel' ? (
+            <View style={styles.buttonLoadingContainer}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.fixedActionButtonText}>Cancelando...</Text>
+            </View>
+          ) : (
+            <Text style={styles.fixedActionButtonText}>Cancelar Venda</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.fixedActionButton,
+            styles.acceptButton,
+            actionLoading !== null && styles.fixedActionButtonDisabled
+          ]}
+          onPress={handleAcceptSale}
+          disabled={actionLoading !== null}
+          activeOpacity={0.8}
+        >
+          {actionLoading === 'accept' ? (
+            <View style={styles.buttonLoadingContainer}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.fixedActionButtonText}>Processando...</Text>
+            </View>
+          ) : (
+            <Text style={styles.fixedActionButtonText}>Aceitar Venda</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   useEffect(() => {
@@ -196,13 +458,17 @@ export function SaleDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, getWebStyles()]}>  
+    <SafeAreaView style={[styles.container, getWebStyles()]}>
       {/* Header */}
       <View style={styles.header}>
         <SimpleHeader title="Detalhes da Venda" onBack={handleBackPress} />
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContentContainer}
+      >
         <View style={styles.contentContainer}>
           {/* Status Pill */}
           <View style={styles.statusRow}>
@@ -210,17 +476,17 @@ export function SaleDetailScreen() {
               style={[styles.statusPill, { backgroundColor: statusColors[sale.status] }]}
               activeOpacity={0.8}
               onPress={() => setDropdownOpen(true)}
-              disabled={updatingStatus}
+              disabled={updatingStatus || sale.status === 'canceled'}
             >
               <Text style={styles.statusPillText}>
-                {statusLabels[sale.status]} 
-                <Text style={styles.statusPillArrow}> ▼</Text>
+                {statusLabels[sale.status]}
+                {sale.status !== 'canceled' && <Text style={styles.statusPillArrow}> ▼</Text>}
               </Text>
               {updatingStatus && (
-                <ActivityIndicator 
-                  size="small" 
-                  color="#fff" 
-                  style={styles.statusLoader} 
+                <ActivityIndicator
+                  size="small"
+                  color="#fff"
+                  style={styles.statusLoader}
                 />
               )}
             </TouchableOpacity>
@@ -262,8 +528,8 @@ export function SaleDetailScreen() {
             <View style={styles.productRow}>
               <View style={styles.productImageContainer}>
                 {sale.product_image_url ? (
-                  <Image 
-                    source={{ uri: sale.product_image_url }} 
+                  <Image
+                    source={{ uri: sale.product_image_url }}
                     style={styles.productImage}
                     resizeMode="cover"
                   />
@@ -286,12 +552,70 @@ export function SaleDetailScreen() {
             </View>
           </View>
 
+          {/* Shipping Details - SÓ APARECE se status for 'processing', 'transport' ou 'delivered' */}
+          {shippingDetails.length > 0 && ['processing', 'transport', 'delivered'].includes(sale.status) && (
+            <>
+              <Text style={styles.sectionTitle}>Informações de Frete:</Text>
+              {shippingDetails.map((shipping, index) => (
+                <View key={index} style={styles.card}>
+                  <Text style={styles.cardLine}>
+                    <Text style={styles.cardLabel}>Transportadora:</Text> {shipping.carrier}
+                  </Text>
+                  <Text style={styles.cardLine}>
+                    <Text style={styles.cardLabel}>Status do Envio:</Text> {shipping.status}
+                  </Text>
+                  <Text style={styles.cardLine}>
+                    <Text style={styles.cardLabel}>Valor do Frete:</Text> {formatPrice(shipping.shipping_fee)}
+                  </Text>
+                  <Text style={styles.cardLine}>
+                    <Text style={styles.cardLabel}>Código de Rastreio:</Text> {shipping.tracking_code || 'Ainda não gerado'}
+                  </Text>
+
+                  {/* Generate/Open Label Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.labelButton,
+                      (!shipping.external_shipment_id) && styles.labelButtonDisabled
+                    ]}
+                    onPress={() => {
+                      if (shipping.label_url) {
+                        handleOpenLabel(shipping.label_url);
+                      } else {
+                        handleGenerateLabel(shipping.id.toString());
+                      }
+                    }}
+                    disabled={!shipping.external_shipment_id || generatingLabel === shipping.id.toString()}
+                  >
+                    {generatingLabel === shipping.id.toString() ? (
+                      <View style={styles.labelButtonLoading}>
+                        <ActivityIndicator size="small" color="#fff" />
+                        <Text style={[styles.labelButtonText, { marginLeft: wp('2%') }]}>
+                          Processando...
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[
+                        styles.labelButtonText,
+                        (!shipping.external_shipment_id) && styles.labelButtonTextDisabled
+                      ]}>
+                        {shipping.label_url ? 'Abrir Etiqueta' : 'Gerar Etiqueta'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {!shipping.external_shipment_id && (
+                    <Text style={styles.warningText}>
+                      * Etiqueta não disponível - Envio não processado pelo sistema
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </>
+          )}
+
           {/* Buyer Details */}
           <Text style={styles.sectionTitle}>Detalhes do comprador:</Text>
           <View style={styles.card}>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>ID do Cliente:</Text> {sale.customer_id}
-            </Text>
             <Text style={styles.cardLine}>
               <Text style={styles.cardLabel}>Endereço:</Text> {sale.customer_address}
             </Text>
@@ -331,8 +655,14 @@ export function SaleDetailScreen() {
               </View>
             </>
           )}
+
+          {/* Espaçamento extra para os botões fixos quando eles aparecem */}
+          {sale.status === 'paid' && <View style={styles.bottomSpacer} />}
         </View>
       </ScrollView>
+
+      {/* Botões de ação fixos no final da tela */}
+      {renderFixedActionButtons()}
 
       {/* Status Dropdown Modal */}
       {dropdownOpen && (
@@ -349,11 +679,11 @@ export function SaleDetailScreen() {
                 onPress={() => handleStatusSelect(option.value)}
               >
                 <View style={styles.dropdownOptionContent}>
-                  <View 
+                  <View
                     style={[
-                      styles.statusIndicator, 
+                      styles.statusIndicator,
                       { backgroundColor: statusColors[option.value] }
-                    ]} 
+                    ]}
                   />
                   <Text style={[
                     styles.dropdownOptionText,
@@ -421,6 +751,10 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       marginHorizontal: wp('2%'),
     }),
+  },
+  scrollContentContainer: {
+    flexGrow: 1,
+    paddingBottom: hp('2%'), // Espaço extra para os botões fixos
   },
   contentContainer: {
     paddingHorizontal: wp('5%'),
@@ -590,6 +924,121 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       fontSize: wp('2.8%'),
       lineHeight: wp('3.8%'),
+    }),
+  },
+  labelButton: {
+    backgroundColor: '#22D883',
+    borderRadius: wp('2%'),
+    paddingVertical: hp('1.2%'),
+    paddingHorizontal: wp('4%'),
+    marginTop: hp('1%'),
+    alignItems: 'center',
+    ...(isWeb && {
+      paddingVertical: hp('1%'),
+      paddingHorizontal: wp('3%'),
+    }),
+  },
+  labelButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  labelButtonText: {
+    color: '#fff',
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.semiBold600,
+    ...(isWeb && {
+      fontSize: wp('2.8%'),
+    }),
+  },
+  labelButtonTextDisabled: {
+    color: '#999',
+  },
+  labelButtonLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  warningText: {
+    fontSize: wp('3%'),
+    fontFamily: fonts.regular400,
+    color: '#FF6B35',
+    marginTop: hp('0.5%'),
+    fontStyle: 'italic',
+    ...(isWeb && {
+      fontSize: wp('2.5%'),
+    }),
+  },
+  // Novos estilos para botões fixos no final da página
+  fixedButtonsContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    paddingHorizontal: wp('5%'),
+    paddingTop: hp('2%'),
+    paddingBottom: hp('3%'),
+    flexDirection: 'row',
+    gap: wp('3%'),
+    borderTopWidth: 1,
+    borderTopColor: '#E8E8E8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
+    ...(isWeb && {
+      paddingHorizontal: wp('3%'),
+      paddingTop: hp('1.5%'),
+      paddingBottom: hp('2%'),
+      gap: wp('2%'),
+    }),
+  },
+  fixedActionButton: {
+    flex: 1,
+    height: hp('6%'),
+    borderRadius: wp('4%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    ...(isWeb && {
+      height: hp('5%'),
+      borderRadius: wp('3%'),
+    }),
+  },
+  acceptButton: {
+    backgroundColor: '#22D883',
+  },
+  cancelButton: {
+    backgroundColor: '#FF3B30',
+  },
+  fixedActionButtonDisabled: {
+    opacity: 0.6,
+    shadowOpacity: 0.05,
+    elevation: 2,
+  },
+  fixedActionButtonText: {
+    color: '#fff',
+    fontSize: wp('4.2%'),
+    fontFamily: fonts.bold700,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+    ...(isWeb && {
+      fontSize: wp('3.2%'),
+    }),
+  },
+  buttonLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: wp('2%'),
+  },
+  bottomSpacer: {
+    height: hp('10%'), // Espaço para os botões fixos quando eles aparecem
+    ...(isWeb && {
+      height: hp('8%'),
     }),
   },
   dropdownOverlay: {

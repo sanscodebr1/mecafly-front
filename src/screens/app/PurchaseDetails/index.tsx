@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -27,8 +28,15 @@ import {
   getPaymentText,
   getInstallmentText
 } from '../../../services/userPurchaseStore';
+import {
+  getPurchaseShipmentsWithTracking,
+  ProductShipmentInfo,
+  getStatusLabel,
+  getStatusColor,
+  formatTrackingDate,
+  formatShippingPrice
+} from '../../../services/shippingService';
 
-// Tipos de navegação
 type RootStackParamList = {
   MyPurchasesScreen: undefined;
   PurchaseDetailScreen: { purchaseId: string };
@@ -36,6 +44,151 @@ type RootStackParamList = {
 
 type PurchaseDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'PurchaseDetailScreen'>;
 type PurchaseDetailScreenRouteProp = RouteProp<RootStackParamList, 'PurchaseDetailScreen'>;
+
+interface ShipmentTrackingProps {
+  purchaseId: number;
+}
+
+function ShipmentTracking({ purchaseId }: ShipmentTrackingProps) {
+  const [shipments, setShipments] = useState<ProductShipmentInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchShipmentData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Usando edge function em vez da chamada direta
+      const result = await getPurchaseShipmentsWithTracking(purchaseId);
+
+      if (result.success && result.data) {
+        setShipments(result.data);
+      } else {
+        setError(result.error || 'Erro ao carregar informações de rastreamento');
+      }
+    } catch (err) {
+      setError('Erro inesperado ao carregar rastreamento');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopyTrackingCode = (code: string) => {
+    Alert.alert(
+      'Código de Rastreamento',
+      `Código: ${code}`,
+      [{ text: 'OK' }]
+    );
+  };
+
+  const renderTrackingTimeline = (shipment: ProductShipmentInfo) => {
+    if (!shipment.tracking_data) return null;
+
+    const { tracking_data } = shipment;
+    const steps = [
+      { key: 'created_at', label: 'Criado', date: tracking_data.created_at },
+      { key: 'paid_at', label: 'Confirmado', date: tracking_data.paid_at },
+      { key: 'generated_at', label: 'Etiqueta Gerada', date: tracking_data.generated_at },
+      { key: 'posted_at', label: 'Postado', date: tracking_data.posted_at },
+      { key: 'delivered_at', label: 'Entregue', date: tracking_data.delivered_at }
+    ].filter(step => step.date);
+
+    return (
+      <View style={styles.timeline}>
+        {steps.map((step, index) => (
+          <View key={step.key} style={styles.timelineItem}>
+            <View style={styles.timelineIndicator}>
+              <View style={[styles.timelineDot, { backgroundColor: '#22D883' }]} />
+              {index < steps.length - 1 && <View style={styles.timelineLine} />}
+            </View>
+            <View style={styles.timelineContent}>
+              <Text style={styles.timelineLabel}>{step.label}</Text>
+              <Text style={styles.timelineDate}>{formatTrackingDate(step.date)}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const renderShipmentCard = (shipment: ProductShipmentInfo) => (
+    <View key={`${shipment.product_id}_${shipment.external_shipment_id}`} style={styles.shipmentCard}>
+      <View style={styles.shipmentHeader}>
+        <Text style={styles.shipmentProduct}>{shipment.product_name}</Text>
+        <View style={[
+          styles.shipmentStatusPill, 
+          { backgroundColor: getStatusColor(shipment.tracking_data?.status || shipment.status) }
+        ]}>
+          <Text style={styles.shipmentStatusText}>
+            {getStatusLabel(shipment.tracking_data?.status || shipment.status)}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.shipmentCarrier}>Transportadora: {shipment.carrier}</Text>
+      
+      {shipment.tracking_data?.melhorenvio_tracking && (
+        <TouchableOpacity 
+          style={styles.trackingCodeContainer}
+          onPress={() => handleCopyTrackingCode(shipment.tracking_data!.melhorenvio_tracking)}
+        >
+          <Text style={styles.trackingCodeLabel}>Código de Rastreamento:</Text>
+          <Text style={styles.trackingCode}>{shipment.tracking_data.melhorenvio_tracking}</Text>
+        </TouchableOpacity>
+      )}
+
+      {shipment.tracking_data?.protocol && (
+        <Text style={styles.protocolText}>Protocolo: {shipment.tracking_data.protocol}</Text>
+      )}
+
+      <Text style={styles.shippingFee}>
+        Frete: {formatShippingPrice(shipment.shipping_fee)}
+      </Text>
+
+      {renderTrackingTimeline(shipment)}
+    </View>
+  );
+
+  useEffect(() => {
+    fetchShipmentData();
+  }, [purchaseId]);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#22D883" />
+        <Text style={styles.loadingText}>Carregando rastreamento...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchShipmentData}>
+          <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (shipments.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>Nenhuma informação de envio encontrada</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.trackingSection}>
+      <Text style={styles.sectionTitle}>Rastreamento de Envios:</Text>
+      {shipments.map(renderShipmentCard)}
+    </View>
+  );
+}
 
 export function PurchaseDetailScreen() {
   const navigation = useNavigation<PurchaseDetailScreenNavigationProp>();
@@ -45,25 +198,20 @@ export function PurchaseDetailScreen() {
   const [purchase, setPurchase] = useState<UserPurchaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Buscar detalhes da compra
   const fetchPurchaseDetails = async () => {
     try {
       setLoading(true);
-      console.log('Buscando detalhes da compra:', purchaseId);
       
       const purchaseData = await getUserPurchaseDetails(purchaseId);
       
       if (purchaseData) {
-        console.log('Dados da compra carregados:', purchaseData);
         setPurchase(purchaseData);
       } else {
-        console.log('Compra não encontrada');
         Alert.alert('Erro', 'Compra não encontrada', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
       }
     } catch (error) {
-      console.error('Erro ao buscar detalhes da compra:', error);
       Alert.alert('Erro', 'Não foi possível carregar os detalhes da compra', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
@@ -76,7 +224,6 @@ export function PurchaseDetailScreen() {
     navigation.goBack();
   };
 
-  // Renderizar item do produto
   const renderProductItem = (item: UserPurchaseItem, index: number) => (
     <View key={item.cart_id} style={styles.productCard}>
       <View style={styles.productRow}>
@@ -123,7 +270,6 @@ export function PurchaseDetailScreen() {
     if (purchaseId) {
       fetchPurchaseDetails();
     } else {
-      console.error('Purchase ID não fornecido');
       navigation.goBack();
     }
   }, [purchaseId]);
@@ -160,7 +306,6 @@ export function PurchaseDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>  
-      {/* Header */}
       <View style={styles.header}>
         <SimpleHeader title="Detalhes da Compra" onBack={handleBackPress} />
       </View>
@@ -168,7 +313,6 @@ export function PurchaseDetailScreen() {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.contentContainer}>
           
-          {/* Status Pill */}
           <View style={styles.statusRow}>
             <View style={[styles.statusPill, { backgroundColor: statusColors[purchase.status] }]}>
               <Text style={styles.statusPillText}>
@@ -177,7 +321,6 @@ export function PurchaseDetailScreen() {
             </View>
           </View>
 
-          {/* Purchase Details */}
           <Text style={styles.sectionTitle}>Detalhes da compra:</Text>
           <View style={styles.card}>
             <Text style={styles.cardLine}>
@@ -210,7 +353,6 @@ export function PurchaseDetailScreen() {
             )}
           </View>
 
-          {/* Delivery Address */}
           <Text style={styles.sectionTitle}>Endereço de entrega:</Text>
           <View style={styles.card}>
             <Text style={styles.cardLine}>
@@ -228,13 +370,14 @@ export function PurchaseDetailScreen() {
             </Text>
           </View>
 
-          {/* Products List */}
           <Text style={styles.sectionTitle}>
             Produtos comprados ({purchase.items.length} {purchase.items.length === 1 ? 'item' : 'itens'}):
           </Text>
           {purchase.items.map((item, index) => renderProductItem(item, index))}
 
-          {/* Purchase Summary */}
+          {/* O ShipmentTracking já usa a edge function automaticamente */}
+          <ShipmentTracking purchaseId={parseInt(purchaseId)} />
+
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Resumo da compra</Text>
             <View style={styles.summaryRow}>
@@ -286,12 +429,26 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular400,
     color: '#666',
   },
+  errorContainer: {
+    padding: wp('5%'),
+    alignItems: 'center',
+  },
   errorText: {
     fontSize: wp('4.5%'),
     fontFamily: fonts.semiBold600,
     color: '#666',
     textAlign: 'center',
     marginBottom: hp('2%'),
+  },
+  emptyContainer: {
+    padding: wp('5%'),
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    textAlign: 'center',
   },
   retryButton: {
     backgroundColor: '#22D883',
@@ -505,6 +662,114 @@ const styles = StyleSheet.create({
     ...(isWeb && {
       fontSize: wp('3.2%'),
     }),
+  },
+  trackingSection: {
+    marginTop: hp('1%'),
+  },
+  shipmentCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: wp('3%'),
+    padding: wp('4%'),
+    marginBottom: hp('1.5%'),
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  shipmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: hp('1%'),
+  },
+  shipmentProduct: {
+    flex: 1,
+    fontSize: wp('4%'),
+    fontFamily: fonts.bold700,
+    color: '#222',
+    marginRight: wp('2%'),
+  },
+  shipmentStatusPill: {
+    borderRadius: wp('4%'),
+    paddingHorizontal: wp('3%'),
+    paddingVertical: hp('0.5%'),
+  },
+  shipmentStatusText: {
+    color: '#fff',
+    fontSize: wp('3%'),
+    fontFamily: fonts.semiBold600,
+  },
+  shipmentCarrier: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginBottom: hp('0.5%'),
+  },
+  trackingCodeContainer: {
+    backgroundColor: '#fff',
+    padding: wp('3%'),
+    borderRadius: wp('2%'),
+    marginBottom: hp('1%'),
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  trackingCodeLabel: {
+    fontSize: wp('3.2%'),
+    fontFamily: fonts.semiBold600,
+    color: '#333',
+    marginBottom: hp('0.3%'),
+  },
+  trackingCode: {
+    fontSize: wp('3.8%'),
+    fontFamily: fonts.bold700,
+    color: '#007AFF',
+  },
+  protocolText: {
+    fontSize: wp('3.2%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginBottom: hp('0.5%'),
+  },
+  shippingFee: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.semiBold600,
+    color: '#22D883',
+    marginBottom: hp('1%'),
+  },
+  timeline: {
+    marginTop: hp('1%'),
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: hp('0.8%'),
+  },
+  timelineIndicator: {
+    alignItems: 'center',
+    marginRight: wp('3%'),
+  },
+  timelineDot: {
+    width: wp('2.5%'),
+    height: wp('2.5%'),
+    borderRadius: wp('1.25%'),
+  },
+  timelineLine: {
+    width: 2,
+    height: hp('2%'),
+    backgroundColor: '#E0E0E0',
+    marginTop: hp('0.3%'),
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineLabel: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.semiBold600,
+    color: '#333',
+  },
+  timelineDate: {
+    fontSize: wp('3%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    marginTop: hp('0.2%'),
   },
   summaryCard: {
     backgroundColor: '#F8F9FA',
