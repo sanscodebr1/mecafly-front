@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -25,12 +26,16 @@ export function AddProductShippingScreen() {
     length: '',
     weight: '',
     declaredValue: '',
+    pickupAvailable: false, 
   });
 
   useEffect(() => {
     // Load existing shipping data if available
     if (productData.shippingConfig) {
-      setFormData(productData.shippingConfig);
+      setFormData({
+        ...productData.shippingConfig,
+        pickupAvailable: productData.shippingConfig.pickupAvailable || false,
+      });
     }
   }, []);
 
@@ -42,19 +47,19 @@ export function AddProductShippingScreen() {
     // Para campos numéricos, permitir apenas números, vírgula e ponto
     if (['height', 'width', 'length', 'weight', 'declaredValue'].includes(field)) {
       const cleanedValue = value.replace(/[^\d,.]/g, '');
-      
+
       // Se houver mais de um separador decimal, mantém apenas o último
       const commaCount = (cleanedValue.match(/,/g) || []).length;
       const dotCount = (cleanedValue.match(/\./g) || []).length;
-      
+
       if (commaCount + dotCount > 1) {
         const lastCommaPos = cleanedValue.lastIndexOf(',');
         const lastDotPos = cleanedValue.lastIndexOf('.');
         const lastSeparatorPos = Math.max(lastCommaPos, lastDotPos);
-        
+
         const beforeSeparator = cleanedValue.substring(0, lastSeparatorPos).replace(/[,.]/g, '');
         const afterSeparator = cleanedValue.substring(lastSeparatorPos);
-        
+
         setFormData(prev => ({
           ...prev,
           [field]: beforeSeparator + afterSeparator
@@ -75,8 +80,8 @@ export function AddProductShippingScreen() {
 
   const handleInputBlur = (field: string) => {
     const value = formData[field as keyof typeof formData];
-    if (!value) return;
-    
+    if (!value || typeof value !== 'string') return;
+
     // Para campos de dimensão (cm) e peso (kg), adicionar ",00" se não há separador decimal
     if (['height', 'width', 'length', 'weight'].includes(field)) {
       if (!value.includes(',') && !value.includes('.')) {
@@ -86,7 +91,7 @@ export function AddProductShippingScreen() {
         }));
         return;
       }
-      
+
       // Se há separador mas nada depois, adiciona "00"
       const lastChar = value.charAt(value.length - 1);
       if (lastChar === ',' || lastChar === '.') {
@@ -96,7 +101,7 @@ export function AddProductShippingScreen() {
         }));
       }
     }
-    
+
     // Para valor declarado (R$), mesma lógica de preço
     if (field === 'declaredValue') {
       if (!value.includes(',') && !value.includes('.')) {
@@ -106,7 +111,7 @@ export function AddProductShippingScreen() {
         }));
         return;
       }
-      
+
       const lastChar = value.charAt(value.length - 1);
       if (lastChar === ',' || lastChar === '.') {
         setFormData(prev => ({
@@ -133,6 +138,13 @@ export function AddProductShippingScreen() {
     );
   };
 
+  const togglePickupAvailable = () => {
+    setFormData(prev => ({
+      ...prev,
+      pickupAvailable: !prev.pickupAvailable
+    }));
+  };
+
   const handleContinue = () => {
     if (isFormValid()) {
       setShippingConfig({
@@ -141,6 +153,7 @@ export function AddProductShippingScreen() {
         length: formData.length.trim(),
         weight: formData.weight.trim(),
         declaredValue: formData.declaredValue.trim(),
+        pickupAvailable: formData.pickupAvailable, // Incluir nova propriedade
       });
       navigation.navigate('AddProductSummary' as never);
     } else {
@@ -171,9 +184,33 @@ export function AddProductShippingScreen() {
             Informe as dimensões, peso e valor do produto para cálculo do frete pelos Correios.
           </Text>
 
+          {/* Opção de Retirada no Local */}
+          <View style={styles.pickupSection}>
+            <TouchableOpacity
+              style={styles.pickupOption}
+              onPress={togglePickupAvailable}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.checkbox,
+                formData.pickupAvailable && styles.checkboxChecked
+              ]}>
+                {formData.pickupAvailable && (
+                  <Text style={styles.checkmark}>✓</Text>
+                )}
+              </View>
+              <Text style={styles.pickupLabel}>
+                Permitir retirada no local da loja
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.pickupHelper}>
+              Ao ativar esta opção, os clientes poderão escolher retirar o produto diretamente no endereço da sua loja, sem custo de frete.
+            </Text>
+          </View>
+
           {/* Dimensões Section */}
           <Text style={styles.sectionLabel}>Dimensões (cm)</Text>
-          
+
           {/* Altura Field */}
           <InputField
             label="Altura:"
@@ -218,7 +255,7 @@ export function AddProductShippingScreen() {
 
           {/* Peso Section */}
           <Text style={styles.sectionLabel}>Peso (kg)</Text>
-          
+
           {/* Peso Field */}
           <InputField
             label="Peso:"
@@ -235,7 +272,7 @@ export function AddProductShippingScreen() {
 
           {/* Valor Section */}
           <Text style={styles.sectionLabel}>Valor para seguro (R$)</Text>
-          
+
           {/* Valor Declarado Field */}
           <InputField
             label="Valor declarado:"
@@ -325,6 +362,74 @@ const styles = StyleSheet.create({
       fontSize: wp('2.8%'),
       marginBottom: hp('3%'),
       lineHeight: wp('4%'),
+    }),
+  },
+  // Novos estilos para seção de retirada
+  pickupSection: {
+    marginBottom: hp('4%'),
+    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('3%'),
+    backgroundColor: '#F8F9FA',
+    borderRadius: wp('2%'),
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    ...(isWeb && {
+      marginBottom: hp('3%'),
+      paddingVertical: hp('1.5%'),
+      paddingHorizontal: wp('2%'),
+    }),
+  },
+  pickupOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: hp('1%'),
+  },
+  checkbox: {
+    width: wp('5%'),
+    height: wp('5%'),
+    borderWidth: 2,
+    borderColor: '#D6DBDE',
+    borderRadius: wp('1%'),
+    marginRight: wp('3%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    ...(isWeb && {
+      width: wp('4%'),
+      height: wp('4%'),
+      marginRight: wp('2%'),
+    }),
+  },
+  checkboxChecked: {
+    backgroundColor: '#22D883',
+    borderColor: '#22D883',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.bold700,
+    ...(isWeb && {
+      fontSize: wp('2.8%'),
+    }),
+  },
+  pickupLabel: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.bold700,
+    color: '#000000',
+    flex: 1,
+    ...(isWeb && {
+      fontSize: wp('3.2%'),
+    }),
+  },
+  pickupHelper: {
+    fontSize: wp('3.2%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    lineHeight: wp('4.2%'),
+    marginTop: hp('0.5%'),
+    ...(isWeb && {
+      fontSize: wp('2.6%'),
+      lineHeight: wp('3.2%'),
     }),
   },
   sectionLabel: {

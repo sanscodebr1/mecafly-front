@@ -64,6 +64,10 @@ import { PaymentGatewayRegistrationScreen } from "../screens/app/PaymentGatewayR
 import { UserAddress } from '../services/userAddress';
 import { MyPurchasesScreen } from "../screens/app/MyPurchases";
 import { PurchaseDetailScreen } from "../screens/app/PurchaseDetails";
+import { CreditCardPaymentConfirmationScreen } from "../screens/app/CreditCardPaymentConfirmation";
+import { BoletoPaymentScreen } from "../screens/app/BoletoPayment";
+import { SupportScreen } from "../screens/app/PurchaseSupport";
+import { SaleSupportScreen } from "../screens/app/SaleSupport";
 
 // Enable native screens
 enableScreens();
@@ -130,6 +134,10 @@ export type RootStackParamList = {
   SellerQuestionsListScreen: undefined;
   MyPurchasesScreen: undefined;
   PurchaseDetailScreen: undefined;
+  CreditCardPaymentConfirmationScreen: undefined;
+  BoletoPaymentScreen: undefined;
+  SupportScreen: undefined;
+  SaleSupportScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -143,69 +151,72 @@ export function Routes() {
           headerShown: false,
           contentStyle: { backgroundColor: '#fff' }
         }}
-      >
-        <Stack.Screen name="Home" component={HomeScreen}/>
-        <Stack.Screen name="Drones" component={DronesScreen}/>
-        <Stack.Screen name="ProductDetail" component={ProductDetailScreen}/>
-        <Stack.Screen name="Cart" component={CartScreen}/>
-        <Stack.Screen name="Checkout" component={CheckoutScreen}/>
-        <Stack.Screen name="PersonalInfo" component={PersonalInfoScreen}/>
-        <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen}/>
-        <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen}/>
-        <Stack.Screen name="PaymentMethodProfessional" component={PaymentMethodProfessionalScreen}/>
-        <Stack.Screen name="Profissionais" component={ProfissionaisScreen}/>
-        <Stack.Screen name="MyProfiles" component={MyProfilesScreen}/>
-        <Stack.Screen name="MyAddresses" component={MyAddressesScreen}/>
-        <Stack.Screen name="NewAddress" component={NewAddressScreen}/>
-        <Stack.Screen name="ChangePassword" component={ChangePasswordScreen}/>
-        <Stack.Screen name="SellerArea" component={SellerAreaScreen}/>
-        <Stack.Screen name="MyProducts" component={MyProductsScreen}/>
-        <Stack.Screen name="MyProductsFilled" component={MyProductsFilledScreen}/>
-        <Stack.Screen name="AddProduct" component={AddProductScreen}/>
-        <Stack.Screen name="AddProductDetails" component={AddProductDetailsScreen}/>
-        <Stack.Screen name="AddProductImages" component={AddProductImagesScreen}/>
-        <Stack.Screen name="AddProductPrice" component={AddProductPriceScreen}/>
-        <Stack.Screen name="AddProductSummary" component={AddProductSummaryScreen}/>
-        <Stack.Screen name="AdPending" component={AdPendingScreen}/>
-        <Stack.Screen name="MySales" component={MySalesScreen}/>
-        <Stack.Screen name="SaleDetails" component={SaleDetailScreen}/>
-        <Stack.Screen name="Profile" component={ProfileScreen}/>
-        <Stack.Screen name="Questions" component={QuestionsScreen}/>
-        <Stack.Screen name="QuestionAnswer" component={QuestionsAnswerScreen}/>
-        <Stack.Screen name="ProfessionalDetail" component={ProfessionalDetailScreen}/>
-        <Stack.Screen name="ProfessionalSchedule" component={ProfessionalScheduleScreen}/>
-        <Stack.Screen name="ProfessionalSummary" component={ProfessionalSummaryScreen}/>
-        <Stack.Screen name="Address" component={AddressScreen}/>
-        <Stack.Screen name="PixPayment" component={PixPaymentScreen}/>
-        <Stack.Screen name="MyContracts" component={MyContractsScreen}/>
-        <Stack.Screen name="ProfessionalRegistration" component={ProfessionalRegistrationScreen}/>
-        <Stack.Screen name="ProfessionalProfile" component={ProfessionalProfileScreen}/>
-        <Stack.Screen name="RegistrationAnalysis" component={RegistrationAnalysisScreen}/>
-        <Stack.Screen name="ProfessionalArea" component={ProfessionalAreaScreen}/>
-        <Stack.Screen name="MyAppointments" component={MyAppointmentsScreen}/>
-        <Stack.Screen name="History" component={HistoryScreen}/>
-        <Stack.Screen name="SellerRegister" component={SellerRegisterScreen}/>
-        <Stack.Screen name="SellerRegisterCPF" component={SellerRegisterCPFScreen}/>
-        <Stack.Screen name="SellerRegisterCNPJ" component={SellerRegisterCNPJScreen}/>
-        <Stack.Screen name="SellerRegisterStore" component={SellerRegisterStoreScreen}/>
-        <Stack.Screen name="DeliveryMethod" component={DeliveryMethodScreen}/>
-        <Stack.Screen name="EditProduct" component={EditProductScreen}/>
-        <Stack.Screen name="EditAddressScreen" component={EditAddressScreen}/>
-        <Stack.Screen name="EditAddress" component={EditAddressScreen}/> 
-        <Stack.Screen name="DeactivateProductSuccess" component={DeactivateProductSuccessScreen} options={{ title: 'Desativar Produto' }}/>
-        <Stack.Screen name="MyOrders" component={MyOrdersScreen}/>
-        <Stack.Screen name="OrderDetails" component={OrderDetailScreen}/>
-        <Stack.Screen name="Documents" component={DocumentsScreen}/>
-        <Stack.Screen name="Login" component={LoginScreen}/>
-        <Stack.Screen name="ProductQuestions" component={ProductQuestionsList}/>
-        <Stack.Screen name="ProfessionalDocuments" component={ProfessionalDocuments}/>
-        <Stack.Screen name="SellerQuestionsListScreen" component={SellerQuestionsListScreen}/>
-        <Stack.Screen name="AddProductShippingScreen" component={AddProductShippingScreen}/>
-        <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen}/>
-        <Stack.Screen name="PaymentGatewayRegistration" component={PaymentGatewayRegistrationScreen}/>
-        <Stack.Screen name="MyPurchases" component={MyPurchasesScreen}/>
-        <Stack.Screen name="PurchaseDetails" component={PurchaseDetailScreen}/>
-      </Stack.Navigator>
+        >
+            <Stack.Screen name="Home" component={HomeScreen}/>
+            <Stack.Screen name="Drones" component={DronesScreen}/>
+            <Stack.Screen name="ProductDetail" component={ProductDetailScreen}/>
+            <Stack.Screen name="Cart" component={CartScreen}/>
+            <Stack.Screen name="Checkout" component={CheckoutScreen}/>
+            <Stack.Screen name="PersonalInfo" component={PersonalInfoScreen}/>
+            <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen}/>
+            <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen}/>
+            <Stack.Screen name="PaymentMethodProfessional" component={PaymentMethodProfessionalScreen}/>
+            <Stack.Screen name="Profissionais" component={ProfissionaisScreen}/>
+            <Stack.Screen name="MyProfiles" component={MyProfilesScreen}/>
+            <Stack.Screen name="MyAddresses" component={MyAddressesScreen}/>
+            <Stack.Screen name="NewAddress" component={NewAddressScreen}/>
+            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen}/>
+            <Stack.Screen name="SellerArea" component={SellerAreaScreen}/>
+            <Stack.Screen name="MyProducts" component={MyProductsScreen}/>
+            <Stack.Screen name="MyProductsFilled" component={MyProductsFilledScreen}/>
+            <Stack.Screen name="AddProduct" component={AddProductScreen}/>
+            <Stack.Screen name="AddProductDetails" component={AddProductDetailsScreen}/>
+            <Stack.Screen name="AddProductImages" component={AddProductImagesScreen}/>
+            <Stack.Screen name="AddProductPrice" component={AddProductPriceScreen}/>
+            <Stack.Screen name="AddProductSummary" component={AddProductSummaryScreen}/>
+            <Stack.Screen name="AdPending" component={AdPendingScreen}/>
+            <Stack.Screen name="MySales" component={MySalesScreen}/>
+            <Stack.Screen name="SaleDetails" component={SaleDetailScreen}/>
+            <Stack.Screen name="Profile" component={ProfileScreen}/>
+            <Stack.Screen name="Questions" component={QuestionsScreen}/>
+            <Stack.Screen name="QuestionAnswer" component={QuestionsAnswerScreen}/>
+            <Stack.Screen name="ProfessionalDetail" component={ProfessionalDetailScreen}/>
+            <Stack.Screen name="ProfessionalSchedule" component={ProfessionalScheduleScreen}/>
+            <Stack.Screen name="ProfessionalSummary" component={ProfessionalSummaryScreen}/>
+            <Stack.Screen name="Address" component={AddressScreen}/>
+            <Stack.Screen name="PixPayment" component={PixPaymentScreen}/>
+            <Stack.Screen name="MyContracts" component={MyContractsScreen}/>
+            <Stack.Screen name="ProfessionalRegistration" component={ProfessionalRegistrationScreen}/>
+            <Stack.Screen name="ProfessionalProfile" component={ProfessionalProfileScreen}/>
+            <Stack.Screen name="RegistrationAnalysis" component={RegistrationAnalysisScreen}/>
+            <Stack.Screen name="ProfessionalArea" component={ProfessionalAreaScreen}/>
+            <Stack.Screen name="MyAppointments" component={MyAppointmentsScreen}/>
+            <Stack.Screen name="History" component={HistoryScreen}/>
+            <Stack.Screen name="SellerRegister" component={SellerRegisterScreen}/>
+            <Stack.Screen name="SellerRegisterCPF" component={SellerRegisterCPFScreen}/>
+            <Stack.Screen name="SellerRegisterCNPJ" component={SellerRegisterCNPJScreen}/>
+            <Stack.Screen name="SellerRegisterStore" component={SellerRegisterStoreScreen}/>
+            <Stack.Screen name="DeliveryMethod" component={DeliveryMethodScreen}/>
+            <Stack.Screen name="EditProduct" component={EditProductScreen}/>
+            <Stack.Screen name="DeactivateProductSuccess" component={DeactivateProductSuccessScreen} options={{ title: 'Desativar Produto' }}/>
+            <Stack.Screen name="MyOrders" component={MyOrdersScreen}/>
+            <Stack.Screen name="OrderDetails" component={OrderDetailScreen}/>
+            <Stack.Screen name="Documents" component={DocumentsScreen}/>
+            <Stack.Screen name="Login" component={LoginScreen}/>
+            <Stack.Screen name="ProductQuestions" component={ProductQuestionsList}/>
+            <Stack.Screen name="ProfessionalDocuments" component={ProfessionalDocuments}/>
+            <Stack.Screen name= "EditAddress" component={EditAddressScreen}/> 
+            <Stack.Screen name="SellerQuestionsListScreen" component={SellerQuestionsListScreen}/>
+            <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen} />
+            <Stack.Screen name="MyPurchases" component={MyPurchasesScreen} />
+            <Stack.Screen name="PurchaseDetails" component={PurchaseDetailScreen} />
+            <Stack.Screen name="CreditCardPaymentConfirmation" component={CreditCardPaymentConfirmationScreen} />
+            <Stack.Screen name="BoletoPayment" component={BoletoPaymentScreen} />
+            <Stack.Screen name="Support" component={SupportScreen} />
+            <Stack.Screen name="SaleSupport" component={SaleSupportScreen} />
+
+        </Stack.Navigator>
+
     </NavigationContainer>
   );
 }

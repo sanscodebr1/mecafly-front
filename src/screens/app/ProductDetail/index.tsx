@@ -313,7 +313,7 @@ export function ProductDetailScreen() {
               />
             ) : (
               <View style={styles.storeImagePlaceholder}>
-                <Text style={styles.storeInitial}>{product.store_name.charAt(0)}</Text>
+                <Text style={styles.storeInitial}>{product.store_name ? product.store_name.charAt(0) : '?'}</Text>
               </View>
             )}
             <View style={styles.storeDetails}>

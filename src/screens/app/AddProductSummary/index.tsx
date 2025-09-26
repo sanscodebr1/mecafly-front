@@ -56,7 +56,7 @@ export function AddProductSummaryScreen() {
     });
   };
 
-const handleContinue = async () => {
+  const handleContinue = async () => {
     if (!productData.selectedCategory || !productData.productDetails || 
         !productData.uploadedImages?.length || !productData.price || !productData.shippingConfig) {
       Alert.alert('Erro', 'Dados do produto incompletos.');
@@ -75,6 +75,7 @@ const handleContinue = async () => {
         length: parseFloat(productData.shippingConfig.length.replace(',', '.')),
         weight: parseFloat(productData.shippingConfig.weight.replace(',', '.')),
         declaredValue: parseFloat(productData.shippingConfig.declaredValue.replace(',', '.')),
+        pickupAvailable: productData.shippingConfig.pickupAvailable, // Incluir nova propriedade
       };
 
       const productId = await createCompleteProduct(
@@ -159,6 +160,31 @@ const handleContinue = async () => {
             <Text style={styles.descriptionTitle}>Descrição geral:</Text>
             <Text style={styles.descriptionText}>{productData.productDetails.descricao}</Text>
           </View>
+
+          {/* Shipping Information */}
+          {productData.shippingConfig && (
+            <View style={styles.shippingContainer}>
+              <Text style={styles.shippingTitle}>Informações de frete:</Text>
+              <View style={styles.shippingDetails}>
+                <Text style={styles.shippingText}>
+                  <Text style={styles.shippingLabel}>Dimensões:</Text> {productData.shippingConfig.height} x {productData.shippingConfig.width} x {productData.shippingConfig.length} cm
+                </Text>
+                <Text style={styles.shippingText}>
+                  <Text style={styles.shippingLabel}>Peso:</Text> {productData.shippingConfig.weight} kg
+                </Text>
+                <Text style={styles.shippingText}>
+                  <Text style={styles.shippingLabel}>Valor declarado:</Text> R$ {productData.shippingConfig.declaredValue}
+                </Text>
+                {productData.shippingConfig.pickupAvailable && (
+                  <View style={styles.pickupInfo}>
+                    <Text style={styles.pickupText}>
+                      ✓ <Text style={styles.pickupLabel}>Retirada no local disponível</Text>
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
 
           {/* Additional Images */}
           {productData.uploadedImages.length > 1 && (
@@ -340,6 +366,58 @@ const styles = StyleSheet.create({
       fontSize: wp('2.8%'),
       lineHeight: hp('2%'),
     }),
+  },
+  // Novos estilos para informações de frete
+  shippingContainer: {
+    marginBottom: hp('2%'),
+    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('3%'),
+    backgroundColor: '#F8F9FA',
+    borderRadius: wp('2%'),
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  shippingTitle: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.bold700,
+    color: '#222',
+    marginBottom: hp('1%'),
+  },
+  shippingDetails: {
+    gap: hp('0.5%'),
+  },
+  shippingText: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#000000',
+    ...(isWeb && {
+      fontSize: wp('2.8%'),
+    }),
+  },
+  shippingLabel: {
+    fontFamily: fonts.bold700,
+    color: '#222',
+  },
+  pickupInfo: {
+    marginTop: hp('1%'),
+    paddingVertical: hp('1%'),
+    paddingHorizontal: wp('2%'),
+    backgroundColor: '#E8F5E8',
+    borderRadius: wp('1.5%'),
+    borderLeftWidth: 3,
+    borderLeftColor: '#22D883',
+  },
+  pickupText: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#22D883',
+    ...(isWeb && {
+      fontSize: wp('2.8%'),
+    }),
+  },
+  pickupLabel: {
+    fontFamily: fonts.bold700,
+    color: '#1B5E20',
   },
   additionalImagesContainer: {
     marginBottom: hp('2%'),
