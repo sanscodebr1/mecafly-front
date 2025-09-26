@@ -153,7 +153,7 @@ export function ProfessionalSideMenu({ isVisible, onClose }: ProfessionalSideMen
 
             <TouchableOpacity
               style={styles.menuOption}
-              onPress={() => navigation.navigate('MyPurchasesScreen' as never)}
+              onPress={() => navigation.navigate('MyPurchases' as never)}
             >
               <Image style={styles.navIconCart} source={require('../assets/icons/shopping-cart.png')} />
               <Text style={styles.menuOptionText}>Minhas compras</Text>

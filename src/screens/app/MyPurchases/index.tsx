@@ -216,7 +216,7 @@ export function MyPurchasesScreen() {
                 key={purchase.purchase_id}
                 style={styles.card}
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate('PurchaseDetailScreen', { purchaseId: purchase.purchase_id.toString() })}
+                onPress={() => navigation.navigate('PurchaseDetail', { purchaseId: purchase.purchase_id.toString() })}
               >
                 <View style={styles.cardLeft}>
                   <Text style={styles.cardTitle}>

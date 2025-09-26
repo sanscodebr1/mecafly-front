@@ -46,7 +46,7 @@ import { ProfessionalAreaScreen } from "../screens/app/Professional/Professional
 import { MyAppointmentsScreen } from "../screens/app/Professional/MyAppointments";
 import { HistoryScreen } from "../screens/app/Professional/History";
 import { SellerRegisterCPFScreen } from "../screens/app/SellerRegisterCPF";
-import { SellerRegisterCNPJScreen as SellerRegisterScreen } from "../screens/app/SellerRegisterCNPJ";
+import { SellerRegisterCNPJScreen, SellerRegisterCNPJScreen as SellerRegisterScreen } from "../screens/app/SellerRegisterCNPJ";
 import { SellerRegisterStoreScreen } from "../screens/app/SellerRegisterStore";
 import { DeliveryMethodScreen } from "../screens/app/DeliveryMethod";
 import { PaymentMethodProfessionalScreen } from "../screens/app/Professional/PaymentMethodProfessional";
@@ -71,6 +71,9 @@ import { CreditCardPaymentConfirmationScreen } from "../screens/app/CreditCardPa
 import { BoletoPaymentScreen } from "../screens/app/BoletoPayment";
 import { SupportScreen } from "../screens/app/PurchaseSupport";
 import { SaleSupportScreen } from "../screens/app/SaleSupport";
+import { DigitalWalletScreen } from "../screens/app/DigitalWallet";
+import { NotificationsScreen } from "../screens/app/Notification";
+
 
 // Enable native screens
 enableScreens();
@@ -144,6 +147,8 @@ export type RootStackParamList = {
   BoletoPaymentScreen: undefined;
   SupportScreen: undefined;
   SaleSupportScreen: undefined;
+  DigitalWalletScreen: undefined;
+  NotificationsScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -215,13 +220,16 @@ export function Routes() {
             <Stack.Screen name="SellerQuestionsListScreen" component={SellerQuestionsListScreen}/>
             <Stack.Screen name="AddProductShipping" component={AddProductShippingScreen} />
             <Stack.Screen name="MyPurchases" component={MyPurchasesScreen} />
-            <Stack.Screen name="PurchaseDetails" component={PurchaseDetailScreen} />
+            <Stack.Screen name="PurchaseDetail" component={PurchaseDetailScreen} />
             <Stack.Screen name="CreditCardPaymentConfirmation" component={CreditCardPaymentConfirmationScreen} />
             <Stack.Screen name="BoletoPayment" component={BoletoPaymentScreen} />
             <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="SaleSupport" component={SaleSupportScreen} />
             <Stack.Screen name="KycTest" component={KycTestScreen}/>
             <Stack.Screen name="ProfessionalEquipmentSelect" component={ProfessionalEquipmentSelectScreen}/>
+            <Stack.Screen name="PaymentGatewayRegistration" component={PaymentGatewayRegistrationScreen}/>
+            <Stack.Screen name="DigitalWallet" component={DigitalWalletScreen}/>
+            <Stack.Screen name="Notifications" component={NotificationsScreen}/>
 
         </Stack.Navigator>
 

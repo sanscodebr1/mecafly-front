@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Animated,
   TextInput,
 } from 'react-native';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { wp, hp, isWeb } from '../utils/responsive';
 import { fonts } from '../constants/fonts';
 import { SideMenu } from './SideMenu';
@@ -16,7 +17,12 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useUserType } from '../hooks/useUserType';
-import { UserStatusBadge } from './UserStatusBadge';
+import {
+  getUserNotifications,
+  subscribeToNotifications,
+  unsubscribeFromNotifications,
+  type Notification,
+} from '../services/notificationService';
 
 interface HeaderProps {
   activeTab?: 'produtos' | 'profissionais';
@@ -31,6 +37,9 @@ export function Header({ activeTab = 'produtos', onTabPress, scrollY, useProfess
   const { user } = useAuth();
   const { isProfessional } = useUserType();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   
   // Animated values for header shrinking (mobile only)
   const internalScrollY = new Animated.Value(0);
@@ -54,12 +63,84 @@ export function Header({ activeTab = 'produtos', onTabPress, scrollY, useProfess
     extrapolate: 'clamp',
   });
 
+  // Carregar contagem de não lidas
+  useEffect(() => {
+    if (user?.id) {
+      loadUnreadCount();
+    }
+  }, [user?.id]);
+
+  // Subscrever a notificações em tempo real
+  useEffect(() => {
+    if (!user?.id) {
+      console.log('⚠️ [Header] Usuário não autenticado, não inscrevendo');
+      return;
+    }
+
+    console.log('📡 [Header] Iniciando inscrição em notificações para user:', user.id);
+
+    const channel = subscribeToNotifications(
+      user.id,
+      (notification: Notification) => {
+        console.log('🔔 [Header] Nova notificação recebida via callback:', notification);
+        console.log('🔔 [Header] Título:', notification.title);
+        console.log('🔔 [Header] Conteúdo:', notification.content);
+        
+        // Incrementar contador
+        setUnreadCount(prev => {
+          const newCount = prev + 1;
+          console.log('📊 [Header] Atualizando contador de', prev, 'para', newCount);
+          return newCount;
+        });
+        
+        // Animação de pulso no badge
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.3,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+    );
+
+    realtimeChannelRef.current = channel;
+
+    return () => {
+      if (realtimeChannelRef.current) {
+        console.log('📡 [Header] Desinscrevendo de notificações');
+        unsubscribeFromNotifications(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
+    };
+  }, [user?.id]);
+
+  const loadUnreadCount = async () => {
+    try {
+      const notifications = await getUserNotifications(true);
+      setUnreadCount(notifications.length);
+    } catch (error) {
+      console.error('Erro ao carregar contagem de não lidas:', error);
+    }
+  };
+
   const handleMenuPress = () => {
     setIsMenuVisible(true);
   };
 
   const handleCloseMenu = () => {
     setIsMenuVisible(false);
+  };
+
+  const handleNotificationPress = () => {
+    // Resetar contagem ao abrir notificações
+    setUnreadCount(0);
+    navigation.navigate('Notifications' as never);
   };
 
   return (
@@ -123,12 +204,22 @@ export function Header({ activeTab = 'produtos', onTabPress, scrollY, useProfess
         )}
         
         <Animated.View style={{ transform: [{ scale: isWeb ? 1 : iconScale }] }}>
-          <TouchableOpacity style={styles.notificationButton}>
-                    <Image
-                    source={require('../assets/icons/notif.png')}
-                    style={styles.notificationIcon}
-                    resizeMode="contain"
-                  />
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={handleNotificationPress}
+          >
+            <Image
+              source={require('../assets/icons/notif.png')}
+              style={styles.notificationIcon}
+              resizeMode="contain"
+            />
+            {unreadCount > 0 && (
+              <Animated.View style={[styles.badge, { transform: [{ scale: pulseAnim }] }]}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </Animated.View>
+            )}
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>
@@ -173,10 +264,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECECEC',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   notificationIcon: {
     height: wp('6.5%'),
     width: wp('6.5%'),
+  },
+  badge: {
+    position: 'absolute',
+    top: -hp('0.5%'),
+    right: -wp('1%'),
+    backgroundColor: '#FF3B30',
+    borderRadius: wp('3%'),
+    minWidth: wp('5%'),
+    height: wp('5%'),
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: wp('1%'),
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: wp('2.5%'),
+    fontFamily: fonts.bold700,
+    textAlign: 'center',
   },
   // Web-specific styles
   webTabContainer: {
@@ -218,7 +330,6 @@ const styles = StyleSheet.create({
     borderRadius: wp('2%'),
     paddingHorizontal: wp('2%'),
     paddingVertical: hp('0.5%'),
-    // marginHorizontal: wp('2%'),
     ...(isWeb && {
         paddingVertical: hp('2.4%'),
         width: wp('70%'),
@@ -241,4 +352,4 @@ const styles = StyleSheet.create({
     fontSize: wp('3%'),
     color: '#000',
   },
-}); 
+});

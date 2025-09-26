@@ -165,6 +165,7 @@ export function SellerAreaScreen() {
       navigation.navigate('SellerQuestionsListScreen' as never);
     }
     if (screen === 'KycTest') navigation.navigate('KycTest' as never);
+    if (screen === 'DigitalWallet') navigation.navigate('DigitalWallet' as never);
   };
 
   const handleAddProduct = () => {
@@ -199,6 +200,7 @@ export function SellerAreaScreen() {
     { id: '4', title: 'Meu perfil', screen: 'MyProfile' },
     { id: '5', title: 'Perguntas', screen: 'Questions' },
     { id: '6', title: 'Teste KYC', screen: 'KycTest' },
+    { id: '7', title: 'Carteira digital', screen: 'DigitalWallet' },
   ];
 
   return (
