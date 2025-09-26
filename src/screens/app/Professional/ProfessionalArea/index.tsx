@@ -14,7 +14,10 @@ import { Header } from '../../../../components/Header';
 import { fonts } from '../../../../constants/fonts';
 import { Colors } from '../../../../constants/colors';
 import { getCurrentUserProfile } from '../../../../services/userProfiles';
+import { supabase } from '../../../../lib/supabaseClient';
 import { PendingMessage } from '../../../../components/PendingMessage';
+import { PaymentGatewayBanner } from '../../../../components/PaymentGatewayBanner';
+import { PaymentGatewayService, AccountGateway } from '../../../../services/paymentGateway';
 
 
 // Banner simples para pendência
@@ -36,6 +39,8 @@ export function ProfessionalAreaScreen() {
 
   const [profileName, setProfileName] = useState<string>('');
   const [profStatus, setProfStatus] = useState<string | null>(null); // 'pending' | 'approved' | etc.
+  const [accountGateway, setAccountGateway] = useState<AccountGateway | null>(null);
+  const [showPaymentBanner, setShowPaymentBanner] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -51,9 +56,53 @@ export function ProfessionalAreaScreen() {
         null;
 
       setProfileName(prof?.name ?? '');
-      // ajuste a chave se no seu schema for "status" em vez de "user_status"
-      setProfStatus(prof?.user_status ?? prof?.status ?? null);
+      const professionalStatus = (prof as any)?.status ?? 'pending';
+      setProfStatus(professionalStatus);
+
+      // Buscar conta de gateway de pagamento
+      if (current.id) {
+        const gateway = await PaymentGatewayService.getUserAccountGateway(current.id);
+        setAccountGateway(gateway);
+      }
     })();
+  }, []);
+
+  // Assinar mudanças de status em tempo real (professional_profile)
+  useEffect(() => {
+    let subscription: any;
+    (async () => {
+      try {
+        // Descobrir user_id atual para filtrar
+        const current = await getCurrentUserProfile();
+        const userId = current?.id;
+        if (!userId) return;
+
+        subscription = supabase
+          .channel('professional_profile_status')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'professional_profile',
+              filter: `user_id=eq.${userId}`,
+            },
+            (payload: any) => {
+              const newRow = payload.new || payload.record;
+              if (newRow?.status) {
+                setProfStatus(newRow.status);
+              }
+            }
+          )
+          .subscribe();
+      } catch {}
+    })();
+
+    return () => {
+      if (subscription) {
+        supabase.removeChannel(subscription);
+      }
+    };
   }, []);
 
   const handleBack = () => navigation.goBack();
@@ -63,6 +112,14 @@ export function ProfessionalAreaScreen() {
     if (screen === 'MyAppointments') return navigation.navigate('MyAppointments' as never);
     if (screen === 'History') return navigation.navigate('History' as never);
     if (screen === 'Financial') return console.log('Financial screen not yet implemented');
+  };
+
+  const handlePaymentGatewayPress = () => {
+    navigation.navigate('PaymentGatewayRegistration' as never);
+  };
+
+  const handleClosePaymentBanner = () => {
+    setShowPaymentBanner(false);
   };
 
   const professionalButtons = [
@@ -75,6 +132,16 @@ export function ProfessionalAreaScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Header scrollY={scrollY} onBack={handleBack} />
+
+      {/* Banner fora do contentContainer para full-bleed */}
+      {showPaymentBanner && profStatus === 'approved' && (
+        <PaymentGatewayBanner
+          accountGateway={accountGateway}
+          onPressRegister={handlePaymentGatewayPress}
+          onClose={handleClosePaymentBanner}
+          showCloseButton={accountGateway?.status === 'approved'}
+        />
+      )}
 
       <ScrollView
         style={styles.scrollView}

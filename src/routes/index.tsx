@@ -2,6 +2,8 @@ import React from "react";
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { enableScreens } from 'react-native-screens';
+
+// Telas
 import { HomeScreen } from "../screens/app/Home";
 import { DronesScreen } from "../screens/app/Drones";
 import { ProductDetailScreen } from "../screens/app/ProductDetail";
@@ -55,9 +57,10 @@ import { OrderDetailScreen } from "../screens/app/OrderDetails";
 import { DocumentsScreen } from "../screens/app/Documents";
 import { LoginScreen } from "../screens/app/Login";
 import ProfessionalDocuments from "../screens/app/Professional/ProfessionalDocuments";
-import  ProductQuestionsList  from "../screens/app/ProductQuestions";
+import ProductQuestionsList from "../screens/app/ProductQuestions";
 import { SellerQuestionsListScreen } from "../screens/app/SellerQuestionsListScreen";
 import { AddProductShippingScreen } from "../screens/app/AddProductShipping";
+import { PaymentGatewayRegistrationScreen } from "../screens/app/PaymentGatewayRegistration";
 import { UserAddress } from '../services/userAddress';
 import { MyPurchasesScreen } from "../screens/app/MyPurchases";
 import { PurchaseDetailScreen } from "../screens/app/PurchaseDetails";
@@ -66,10 +69,7 @@ import { BoletoPaymentScreen } from "../screens/app/BoletoPayment";
 import { SupportScreen } from "../screens/app/PurchaseSupport";
 import { SaleSupportScreen } from "../screens/app/SaleSupport";
 
-
-
-
-// Enable native screens for better performance
+// Enable native screens
 enableScreens();
 
 export type RootStackParamList = {
@@ -120,12 +120,18 @@ export type RootStackParamList = {
   MyProductsFilled: undefined;
   EditProduct: undefined;
   EditAddressScreen: undefined;
+  EditAddress: undefined; // alias
   DeactivateProductSuccess: undefined;
   MyOrders: undefined;
   OrderDetails: undefined;
   Documents: undefined;
   Login: undefined;
   AddProductShippingScreen: undefined;
+  AddProductShipping: undefined; // alias
+  PaymentGatewayRegistration: undefined;
+  ProfessionalDocuments: undefined;
+  ProductQuestions: undefined;
+  SellerQuestionsListScreen: undefined;
   MyPurchasesScreen: undefined;
   PurchaseDetailScreen: undefined;
   CreditCardPaymentConfirmationScreen: undefined;
@@ -136,17 +142,16 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export function Routes(){
-return(
+export function Routes() {
+  return (
     <NavigationContainer>
-        <Stack.Navigator
+      <Stack.Navigator
         initialRouteName='Home'
         screenOptions={{
-            headerShown: false,
-            contentStyle: {backgroundColor:'#fff'}
+          headerShown: false,
+          contentStyle: { backgroundColor: '#fff' }
         }}
         >
-
             <Stack.Screen name="Home" component={HomeScreen}/>
             <Stack.Screen name="Drones" component={DronesScreen}/>
             <Stack.Screen name="ProductDetail" component={ProductDetailScreen}/>
@@ -213,5 +218,5 @@ return(
         </Stack.Navigator>
 
     </NavigationContainer>
-);
+  );
 }
