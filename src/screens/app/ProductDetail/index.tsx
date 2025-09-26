@@ -31,7 +31,7 @@ export function ProductDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { productId } = route.params as RouteParams;
-  
+
   const [quantity, setQuantity] = useState(1);
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
   const [activeTab, setActiveTab] = useState<'produtos' | 'profissionais'>('produtos');
@@ -41,7 +41,7 @@ export function ProductDetailScreen() {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Estados para o carrinho
   const [addingToCart, setAddingToCart] = useState(false);
   const [productInCart, setProductInCart] = useState({ inCart: false, quantity: 0 });
@@ -68,7 +68,7 @@ export function ProductDetailScreen() {
     try {
       setLoading(true);
       const productData = await getProductDetail(productId);
-      
+
       if (productData) {
         setProduct(productData);
         setError(null);
@@ -119,9 +119,9 @@ export function ProductDetailScreen() {
 
     try {
       setAddingToCart(true);
-      
+
       const success = await addToCart(productId, quantity);
-      
+
       if (success) {
         // Navegar diretamente para o carrinho
         navigation.navigate('Cart' as never);
@@ -143,7 +143,10 @@ export function ProductDetailScreen() {
 
   const formatInstallment = (price: number) => {
     const installmentValue = (price / 100) / 12;
-    return `ou 12x de R$ ${installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} com juros`;
+    return `ou 12x de R$ ${installmentValue.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })} com juros`;
   };
 
   // Mock de avaliações - você pode implementar isso no futuro
@@ -185,8 +188,8 @@ export function ProductDetailScreen() {
           <TouchableOpacity style={styles.retryButton} onPress={loadProductDetails}>
             <Text style={styles.retryText}>Tentar novamente</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.backButton} 
+          <TouchableOpacity
+            style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
             <Text style={styles.backText}>Voltar</Text>
@@ -200,8 +203,8 @@ export function ProductDetailScreen() {
     <SafeAreaView style={[styles.container, getWebStyles()]}>
       <Header activeTab={activeTab} onTabPress={handleTabPress} scrollY={scrollY} />
 
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
@@ -221,8 +224,8 @@ export function ProductDetailScreen() {
         {/* Product Image */}
         <View style={styles.productImageContainer}>
           {product.main_image_url ? (
-            <Image 
-              source={{ uri: product.main_image_url }} 
+            <Image
+              source={{ uri: product.main_image_url }}
               style={styles.productImage}
               resizeMode="cover"
             />
@@ -241,7 +244,7 @@ export function ProductDetailScreen() {
           )}
           <Text style={styles.productPrice}>{formatPrice(product.price)}</Text>
           <Text style={styles.productInstallment}>{formatInstallment(product.price)}</Text>
-          
+
           {/* Stock info */}
           <Text style={styles.stockInfo}>
             {product.stock > 0 ? `${product.stock} em estoque` : 'Fora de estoque'}
@@ -255,42 +258,42 @@ export function ProductDetailScreen() {
           )}
         </View>
 
-      {/* Quantity and Buy Section */}
-      {product.stock > 0 && (
-        <View style={styles.actionContainer}>
-          <View style={styles.quantityContainer}>
-            <TouchableOpacity 
-              style={[styles.quantityButton, quantity <= 1 && styles.disabledButton]}
-              onPress={() => handleQuantityChange(-1)}
-              disabled={quantity <= 1}
+        {/* Quantity and Buy Section */}
+        {product.stock > 0 && (
+          <View style={styles.actionContainer}>
+            <View style={styles.quantityContainer}>
+              <TouchableOpacity
+                style={[styles.quantityButton, quantity <= 1 && styles.disabledButton]}
+                onPress={() => handleQuantityChange(-1)}
+                disabled={quantity <= 1}
+              >
+                <Text style={styles.quantityButtonText}>-</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.quantityText}>{quantity}</Text>
+
+              <TouchableOpacity
+                style={[styles.quantityButton, quantity >= product.stock && styles.disabledButton]}
+                onPress={() => handleQuantityChange(1)}
+                disabled={quantity >= product.stock}
+              >
+                <Text style={styles.quantityButtonText}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.buyButton}
+              onPress={handleBuyNow}
+              disabled={addingToCart}
             >
-              <Text style={styles.quantityButtonText}>-</Text>
-            </TouchableOpacity>
-            
-            <Text style={styles.quantityText}>{quantity}</Text>
-            
-            <TouchableOpacity 
-              style={[styles.quantityButton, quantity >= product.stock && styles.disabledButton]}
-              onPress={() => handleQuantityChange(1)}
-              disabled={quantity >= product.stock}
-            >
-              <Text style={styles.quantityButtonText}>+</Text>
+              {addingToCart ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.buyButtonText}>Comprar</Text>
+              )}
             </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity 
-            style={styles.buyButton}
-            onPress={handleBuyNow}
-            disabled={addingToCart}
-          >
-            {addingToCart ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.buyButtonText}>Comprar</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
+        )}
 
         {/* Out of stock message */}
         {product.stock === 0 && (
@@ -304,13 +307,13 @@ export function ProductDetailScreen() {
           <Text style={styles.sectionTitle}>Vendido por</Text>
           <View style={styles.storeInfo}>
             {product.store_picture ? (
-              <Image 
-                source={{ uri: product.store_picture }} 
+              <Image
+                source={{ uri: product.store_picture }}
                 style={styles.storeImage}
               />
             ) : (
               <View style={styles.storeImagePlaceholder}>
-                <Text style={styles.storeInitial}>{product.store_name.charAt(0)}</Text>
+                <Text style={styles.storeInitial}>{product.store_name ? product.store_name.charAt(0) : '?'}</Text>
               </View>
             )}
             <View style={styles.storeDetails}>
@@ -324,8 +327,8 @@ export function ProductDetailScreen() {
             </View>
           </View>
         </View>
-        
-                
+
+
         {/* Description Section */}
         <View style={styles.descriptionContainer}>
           <Text style={styles.sectionTitle}>Descrição</Text>
@@ -334,32 +337,32 @@ export function ProductDetailScreen() {
           </Text>
         </View>
         {/* Q&A shortcut */}
-     <View style={styles.qaSection}>
+        <View style={styles.qaSection}>
           <Text style={styles.sectionTitle}>Perguntas e respostas</Text>
 
-  <TouchableOpacity
-    style={styles.viewAllBtn}
-    activeOpacity={0.7}
-onPress={() =>
-  (navigation as any).navigate("ProductQuestions", { 
-    productId, 
-    storeProfileId: product?.store_id 
-  })
-}  >
-    <Text style={styles.viewAllText}>Ver todas as perguntas</Text>
-    <Text style={styles.arrow}>›</Text>
-  </TouchableOpacity>
-</View>
+          <TouchableOpacity
+            style={styles.viewAllBtn}
+            activeOpacity={0.7}
+            onPress={() =>
+              (navigation as any).navigate("ProductQuestions", {
+                productId,
+                storeProfileId: product?.store_id
+              })
+            }  >
+            <Text style={styles.viewAllText}>Ver todas as perguntas</Text>
+            <Text style={styles.arrow}>›</Text>
+          </TouchableOpacity>
+        </View>
 
-     
+
         {/* Reviews Section */}
         <View style={styles.reviewsContainer}>
           <Text style={styles.sectionTitle}>Avaliações</Text>
           {reviews.map((review) => (
             <View key={review.id} style={styles.reviewItem}>
               <View style={styles.reviewHeader}>
-                <Image 
-                  style={styles.navIcon}  
+                <Image
+                  style={styles.navIcon}
                   source={require('../../../assets/icons/persongray.png')}
                 />
                 <View style={styles.reviewInfo}>

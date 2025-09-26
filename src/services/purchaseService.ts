@@ -1,6 +1,6 @@
 // services/purchaseService.ts
 import { supabase } from '../lib/supabaseClient';
-import { CartSummary, markCartItemsAsProcessed } from './cart';
+import { CartSummary } from './cart';
 import { ShippingOption } from './shippingService';
 import { UserAddress } from './userAddress';
 
@@ -53,301 +53,191 @@ export interface StoreSale {
   purchase_id?: number;
 }
 
+// Função auxiliar para chamar a edge function
+async function callPurchaseEdgeFunction(action: string, payload: any) {
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session) {
+    throw new Error('Usuário não autenticado');
+  }
+
+  // Verificar se a sessão não está expirada
+  const now = Math.round(Date.now() / 1000);
+  const tokenExpiry = session.expires_at || 0;
+  
+  if (tokenExpiry <= now) {
+    console.log('Token expirado, tentando renovar...');
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    
+    if (refreshError || !refreshData.session) {
+      throw new Error('Sessão expirada e não foi possível renovar');
+    }
+    
+    // Usar a sessão renovada
+    session = refreshData.session;
+  }
+
+  try {
+    console.log('🚀 Chamando Purchase Edge Function:', action);
+    console.log('📋 Payload:', JSON.stringify(payload, null, 2));
+    
+    const response = await fetch(
+      `${supabase.supabaseUrl}/functions/v1/purchase-service?action=${action}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzc2lvdmtlZXpmaGF2ZmlzYWxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYxNDM1NjAsImV4cCI6MjA3MTcxOTU2MH0.Ne_L8SZJn5Lg3_DY1i_2RVHABGLlQrcma7JkW3TkNgc',
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    console.log('📡 Response Status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Edge Function HTTP Error: ${response.status}`, errorText);
+      throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ Edge Function Response:', result);
+
+    return result;
+  } catch (error) {
+    console.error('❌ Erro ao chamar edge function:', error);
+    throw new Error(`Erro inesperado: ${error instanceof Error ? error.message : error}`);
+  }
+}
+
+// Função principal para criar purchase
 export async function createPurchase(purchaseData: CreatePurchaseData): Promise<Purchase | null> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    console.log('Criando purchase:', purchaseData);
     
-    if (!user) {
-      console.error('Usuário não autenticado');
-      return null;
+    const result = await callPurchaseEdgeFunction('create', purchaseData);
+
+    if (result?.success && result?.purchase) {
+      return result.purchase;
     }
 
-    const { cart, shippingOption, paymentMethod, selectedAddress, installments } = purchaseData;
-
-    // Verificar se o carrinho está vazio (só considera itens com purchase_id null)
-    if (cart.items.length === 0) {
-      console.error('Carrinho está vazio ou todos os itens já foram processados');
-      return null;
-    }
-
-    const productsTotal = cart.totalValue; 
-
-    console.log('=== INICIANDO CRIAÇÃO DA PURCHASE ===');
-    console.log('Total dos produtos:', productsTotal);
-    console.log('Valor do frete:', shippingOption.price);
-    console.log('Método de pagamento:', paymentMethod);
-    console.log('Parcelas:', installments);
-    console.log('Endereço ID:', selectedAddress.id);
-    console.log('Itens do carrinho (ativos):', cart.items.length);
-
-    // STEP 1: Criar a purchase principal primeiro
-    const purchaseRecord = {
-      customer_id: user.id,
-      gateway_order_id: null,
-      amount: productsTotal, 
-      status: 'waiting_payment' as SaleStatus,
-      shipping_fee: shippingOption.price, 
-      payment_method: paymentMethod,
-      address_id: selectedAddress.id, 
-      installment: paymentMethod === 'credit_card' ? installments || 1 : null, 
-    };
-
-    console.log('Dados da purchase:', purchaseRecord);
-
-    // Inserir a purchase principal
-    const { data: purchase, error: purchaseError } = await supabase
-      .from('purchase')
-      .insert(purchaseRecord)
-      .select()
-      .single();
-
-    if (purchaseError) {
-      console.error('Erro ao criar purchase:', purchaseError);
-      return null;
-    }
-
-    console.log('✅ Purchase criada com ID:', purchase.id);
-
-    // STEP 2: Marcar itens do carrinho como processados ANTES de criar store_sales
-    const cartUpdateSuccess = await markCartItemsAsProcessed(purchase.id);
-    
-    if (!cartUpdateSuccess) {
-      console.error('Erro ao marcar itens do carrinho como processados');
-      // Tentar reverter a purchase criada
-      await supabase.from('purchase').delete().eq('id', purchase.id);
-      return null;
-    }
-
-    // STEP 3: Criar store_sales vinculadas à purchase criada
-    const storeSalesPromises = cart.items.map(async (item) => {
-      // Calcular valor total do item (preço unitário * quantidade)
-      const itemTotalAmount = parseFloat(item.price.replace('R$ ', '').replace(',', '.')) * 100 * item.quantity;
-      
-      // Usar diretamente o storeUserId que já vem da view
-      const storeUserId = item.storeUserId;
-
-      console.log(`Debug item ${item.name}:`, {
-        storeId_from_cart: item.storeId,
-        storeUserId_from_cart: item.storeUserId,
-        storeName: item.storeName
-      });
-      
-      const storeSaleRecord = {
-        store_id: storeUserId,
-        customer_id: user.id,
-        product_id: parseInt(item.productId),
-        amount: itemTotalAmount,
-        status: 'waiting_payment' as SaleStatus,
-        quantity: item.quantity,
-        payment_method: paymentMethod,
-        installment: paymentMethod === 'credit_card' ? installments || 1 : null,
-        customer_address: selectedAddress.id,
-        purchase_id: purchase.id, // Vincular à purchase criada
-      };
-
-      console.log(`Criando store_sale para produto ${item.name} vinculada à purchase ${purchase.id}:`, storeSaleRecord);
-
-      const { data: storeSale, error: storeSaleError } = await supabase
-        .from('store_sale')
-        .insert(storeSaleRecord)
-        .select()
-        .single();
-
-      if (storeSaleError) {
-        console.error('Erro ao criar store_sale:', storeSaleError);
-        return null;
-      }
-
-      console.log('✅ Store sale criada com ID:', storeSale.id, '-> vinculada à purchase:', storeSale.purchase_id);
-      return storeSale;
-    });
-
-    // Aguardar todas as store_sales serem criadas
-    const storeSales = await Promise.all(storeSalesPromises);
-    
-    // Verificar se todas foram criadas com sucesso
-    const failedSales = storeSales.filter(sale => sale === null);
-    if (failedSales.length > 0) {
-      console.error(`${failedSales.length} store_sales falharam ao ser criadas`);
-      // Opcional: implementar rollback completo aqui se necessário
-    }
-
-    const successfulSales = storeSales.filter(sale => sale !== null);
-    console.log(`=== PURCHASE ${purchase.id} CRIADA COM SUCESSO ===`);
-    console.log(`- Purchase ID: ${purchase.id}`);
-    console.log(`- Store sales criadas: ${successfulSales.length}/${cart.items.length}`);
-    console.log(`- Parcelas: ${installments || 1}`);
-    console.log(`- Endereço ID: ${selectedAddress.id}`);
-    console.log(`- Valor total: R$ ${(purchase.amount + purchase.shipping_fee) / 100}`);
-    console.log(`- Itens do carrinho marcados como processados: ✅`);
-
-    return purchase as Purchase;
-
+    console.warn('Edge function retornou success false:', result);
+    return null;
   } catch (error) {
-    console.error('Erro inesperado ao criar purchase:', error);
+    console.error('Erro ao criar purchase:', error);
     return null;
   }
 }
 
+// Buscar purchase por ID
 export async function getPurchaseById(purchaseId: number): Promise<Purchase | null> {
   try {
-    const { data, error } = await supabase
-      .from('purchase')
-      .select('*')
-      .eq('id', purchaseId)
-      .single();
+    const result = await callPurchaseEdgeFunction('get-by-id', { purchaseId });
 
-    if (error) {
-      console.error('Erro ao buscar purchase:', error);
-      return null;
+    if (result?.success) {
+      return result.purchase || null;
     }
 
-    return data as Purchase;
+    return null;
   } catch (error) {
-    console.error('Erro inesperado ao buscar purchase:', error);
+    console.error('Erro ao buscar purchase por ID:', error);
     return null;
   }
 }
 
+// Buscar todas as purchases do usuário
 export async function getUserPurchases(): Promise<Purchase[]> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      console.error('Usuário não autenticado');
-      return [];
+    const result = await callPurchaseEdgeFunction('get-user-purchases', {});
+
+    if (result?.success) {
+      return result.purchases || [];
     }
 
-    const { data, error } = await supabase
-      .from('purchase')
-      .select('*')
-      .eq('customer_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao buscar purchases do usuário:', error);
-      return [];
-    }
-
-    return data as Purchase[];
+    return [];
   } catch (error) {
-    console.error('Erro inesperado ao buscar purchases:', error);
+    console.error('Erro ao buscar purchases do usuário:', error);
     return [];
   }
 }
 
+// Buscar vendas da loja
 export async function getStoreSales(): Promise<StoreSale[]> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      console.error('Usuário não autenticado');
-      return [];
+    const result = await callPurchaseEdgeFunction('get-store-sales', {});
+
+    if (result?.success) {
+      return result.storeSales || [];
     }
 
-    const { data, error } = await supabase
-      .from('store_sale')
-      .select('*')
-      .eq('store_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao buscar vendas da loja:', error);
-      return [];
-    }
-
-    return data as StoreSale[];
+    return [];
   } catch (error) {
-    console.error('Erro inesperado ao buscar vendas da loja:', error);
+    console.error('Erro ao buscar vendas da loja:', error);
     return [];
   }
 }
 
+// Atualizar status da purchase
 export async function updatePurchaseStatus(purchaseId: number, status: SaleStatus): Promise<boolean> {
   try {
-    // Atualizar a purchase
-    const { error: purchaseError } = await supabase
-      .from('purchase')
-      .update({ status })
-      .eq('id', purchaseId);
-
-    if (purchaseError) {
-      console.error('Erro ao atualizar status da purchase:', purchaseError);
-      return false;
-    }
-
-    // Atualizar todas as store_sales relacionadas usando purchase_id
-    const { error: storeSalesError } = await supabase
-      .from('store_sale')
-      .update({ status })
-      .eq('purchase_id', purchaseId);
-
-    if (storeSalesError) {
-      console.error('Erro ao atualizar status das store_sales:', storeSalesError);
-      return false;
-    }
-
-    console.log(`Status da purchase ${purchaseId} e store_sales relacionadas atualizado para: ${status}`);
-    return true;
+    const result = await callPurchaseEdgeFunction('update-status', { purchaseId, status });
+    return result?.success || false;
   } catch (error) {
-    console.error('Erro inesperado ao atualizar status:', error);
+    console.error('Erro ao atualizar status da purchase:', error);
     return false;
   }
 }
 
+// Atualizar gateway order ID
 export async function updatePurchaseGatewayOrderId(purchaseId: number, gatewayOrderId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('purchase')
-      .update({ gateway_order_id: gatewayOrderId })
-      .eq('id', purchaseId);
-
-    if (error) {
-      console.error('Erro ao atualizar gateway_order_id:', error);
-      return false;
-    }
-
-    console.log(`Gateway Order ID ${gatewayOrderId} adicionado à purchase ${purchaseId}`);
-    return true;
+    const result = await callPurchaseEdgeFunction('update-gateway-order-id', { 
+      purchaseId, 
+      gatewayOrderId 
+    });
+    return result?.success || false;
   } catch (error) {
-    console.error('Erro inesperado ao atualizar gateway_order_id:', error);
+    console.error('Erro ao atualizar gateway order ID:', error);
     return false;
   }
 }
 
+// Buscar store sales por purchase ID
 export async function getStoreSalesByPurchaseId(purchaseId: number): Promise<StoreSale[]> {
   try {
-    const { data, error } = await supabase
-      .from('store_sale')
-      .select('*')
-      .eq('purchase_id', purchaseId)
-      .order('created_at', { ascending: false });
+    const result = await callPurchaseEdgeFunction('get-store-sales-by-purchase', { purchaseId });
 
-    if (error) {
-      console.error('Erro ao buscar store sales por purchase ID:', error);
-      return [];
+    if (result?.success) {
+      return result.storeSales || [];
     }
 
-    return data as StoreSale[];
+    return [];
   } catch (error) {
-    console.error('Erro inesperado ao buscar store sales:', error);
+    console.error('Erro ao buscar store sales por purchase ID:', error);
     return [];
   }
 }
 
+// Buscar purchase com store sales
 export async function getPurchaseWithStoreSales(purchaseId: number): Promise<{
   purchase: Purchase | null;
   storeSales: StoreSale[];
 }> {
   try {
-    const [purchase, storeSales] = await Promise.all([
-      getPurchaseById(purchaseId),
-      getStoreSalesByPurchaseId(purchaseId)
-    ]);
+    const result = await callPurchaseEdgeFunction('get-purchase-with-store-sales', { purchaseId });
+
+    if (result?.success) {
+      return {
+        purchase: result.purchase || null,
+        storeSales: result.storeSales || []
+      };
+    }
 
     return {
-      purchase,
-      storeSales
+      purchase: null,
+      storeSales: []
     };
   } catch (error) {
     console.error('Erro ao buscar purchase com store sales:', error);
@@ -358,55 +248,16 @@ export async function getPurchaseWithStoreSales(purchaseId: number): Promise<{
   }
 }
 
-// ★ NOVA FUNÇÃO: Buscar histórico de compras do usuário com itens do carrinho
+// Buscar histórico de compras do usuário com itens do carrinho
 export async function getUserPurchaseHistory(): Promise<Array<Purchase & { cartItems: any[] }>> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      console.error('Usuário não autenticado');
-      return [];
+    const result = await callPurchaseEdgeFunction('get-purchase-history', {});
+
+    if (result?.success) {
+      return result.history || [];
     }
 
-    // Buscar purchases do usuário
-    const { data: purchases, error: purchaseError } = await supabase
-      .from('purchase')
-      .select('*')
-      .eq('customer_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (purchaseError) {
-      console.error('Erro ao buscar histórico de purchases:', purchaseError);
-      return [];
-    }
-
-    if (!purchases || purchases.length === 0) {
-      return [];
-    }
-
-    // Para cada purchase, buscar os itens do carrinho relacionados
-    const purchasesWithItems = await Promise.all(
-      purchases.map(async (purchase) => {
-        const { data: cartItems, error: cartError } = await supabase
-          .from('vw_cart_detail')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('purchase_id', purchase.id)
-          .order('added_at', { ascending: false });
-
-        if (cartError) {
-          console.error(`Erro ao buscar itens da purchase ${purchase.id}:`, cartError);
-          return { ...purchase, cartItems: [] };
-        }
-
-        return {
-          ...purchase,
-          cartItems: cartItems || []
-        };
-      })
-    );
-
-    return purchasesWithItems;
+    return [];
   } catch (error) {
     console.error('Erro ao buscar histórico de compras:', error);
     return [];
