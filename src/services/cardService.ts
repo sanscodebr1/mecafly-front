@@ -31,7 +31,17 @@ export interface SavedCard {
   created_at: string;
 }
 
-// Função para criptografia simples (use crypto-js em produção)
+export interface VerificationData {
+  verificationId: number;
+  cardIdentifier: string;
+  verificationAmount: number;
+  amountInReais: string;
+  expiresAt: string;
+  chargeId: string;
+  refundId?: string;
+}
+
+// Função para criptografia simples
 function encryptData(data: string, key: string): string {
   let encrypted = '';
   for (let i = 0; i < data.length; i++) {
@@ -63,7 +73,6 @@ async function callCardEdgeFunction(action: string, payload: any = {}) {
 
   try {
     console.log('💳 Chamando Card Edge Function:', action);
-    console.log('📦 Payload:', action === 'create_card' ? 'Dados criptografados' : JSON.stringify(payload, null, 2));
     
     const response = await fetch(
       `${supabase.supabaseUrl}/functions/v1/card_service?action=${action}`,
@@ -96,29 +105,83 @@ async function callCardEdgeFunction(action: string, payload: any = {}) {
   }
 }
 
-// Criar novo cartão
-export async function createCard(cardData: CardData, customerData: CustomerData): Promise<SavedCard | null> {
+// Iniciar verificação de cartão com micro-transação
+export async function startCardVerification(cardData: CardData, customerData: CustomerData): Promise<VerificationData | null> {
   try {
-    const encryptionKey = 'default_key_change_in_production'; // Mesma chave do backend
+    const encryptionKey = 'default_key_change_in_production';
     
-    // Criptografar dados sensíveis do cartão
-    console.log('Criptografando dados do cartão...');
+    console.log('🔐 Iniciando verificação do cartão...');
     const encryptedCardData = encryptData(JSON.stringify(cardData), encryptionKey);
-    console.log('Dados criptografados:', encryptedCardData.substring(0, 50) + '...');
     
-    const result = await callCardEdgeFunction('create_card', {
+    const result = await callCardEdgeFunction('start_verification', {
       encryptedCardData,
       customerData
     });
 
     if (result?.success && result?.data) {
+      console.log('✅ Verificação iniciada:', result.data);
       return result.data;
     }
 
     console.warn('Edge function retornou success false:', result);
     return null;
   } catch (error) {
-    console.error('Erro ao criar cartão:', error);
+    console.error('Erro ao iniciar verificação:', error);
+    throw error;
+  }
+}
+
+// Verificar valor inserido pelo usuário
+export async function verifyCardAmount(cardIdentifier: string, userAmountInCents: number): Promise<{ success: boolean; verified?: boolean; error?: string }> {
+  try {
+    console.log('🔍 Verificando valor inserido...');
+    console.log('Card Identifier:', cardIdentifier);
+    console.log('User Amount (centavos):', userAmountInCents);
+    
+    const result = await callCardEdgeFunction('verify_amount', {
+      cardIdentifier,
+      userAmount: userAmountInCents
+    });
+
+    if (result?.success && result?.verified) {
+      console.log('✅ Cartão verificado com sucesso!');
+      return { success: true, verified: true };
+    }
+
+    console.log('❌ Verificação falhou:', result?.error);
+    return { 
+      success: false, 
+      error: result?.error || 'Erro na verificação' 
+    };
+  } catch (error) {
+    console.error('Erro ao verificar valor:', error);
+    throw error;
+  }
+}
+
+// Criar cartão após verificação bem-sucedida
+export async function createVerifiedCard(cardData: CardData, customerData: CustomerData, cardIdentifier: string): Promise<SavedCard | null> {
+  try {
+    const encryptionKey = 'default_key_change_in_production';
+    
+    console.log('💳 Criando cartão verificado...');
+    const encryptedCardData = encryptData(JSON.stringify(cardData), encryptionKey);
+    
+    const result = await callCardEdgeFunction('create_card', {
+      encryptedCardData,
+      customerData,
+      cardIdentifier
+    });
+
+    if (result?.success && result?.data) {
+      console.log('✅ Cartão criado:', result.data);
+      return result.data;
+    }
+
+    console.warn('Edge function retornou success false:', result);
+    return null;
+  } catch (error) {
+    console.error('Erro ao criar cartão verificado:', error);
     throw error;
   }
 }
@@ -166,7 +229,7 @@ export async function deleteCard(cardId: number): Promise<boolean> {
 // Obter token do cartão para transações
 export async function getCardTokenForTransaction(cardId: number): Promise<string | null> {
   try {
-    console.log('🔑 Obtendo token do cartão para transação:', cardId);
+    console.log('🔓 Obtendo token do cartão para transação:', cardId);
     
     const result = await callCardEdgeFunction('get_card_token', { cardId });
     
@@ -270,6 +333,16 @@ export function validateCPF(cpf: string): boolean {
 export function maskCPF(cpf: string): string {
   const cleaned = cpf.replace(/\D/g, '');
   return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+// Função auxiliar para converter reais para centavos
+export function reaisToLentavos(reais: string): number {
+  return Math.round(parseFloat(reais.replace(',', '.')) * 100);
+}
+
+// Função auxiliar para converter centavos para reais formatado
+export function centavosToReais(centavos: number): string {
+  return (centavos / 100).toFixed(2).replace('.', ',');
 }
 
 // Função auxiliar para mascarar CEP

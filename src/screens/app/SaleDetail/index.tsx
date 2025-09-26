@@ -10,6 +10,10 @@ import {
   Alert,
   Image,
   Linking,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -26,16 +30,17 @@ import {
   ShippingDetail,
   statusLabels,
   statusColors,
-  paymentMethodLabels
+  paymentMethodLabels,
+  getStoreTickets,
+  StoreSupportTicket
 } from '../../../services/salesStore';
-import { generateShippingLabel, payShippingLabelsForPurchase } from '../../../services/shippingService';
+import { generateShippingLabel, payShippingLabelsForPurchase, confirmStoreDeliveryAndUpdateSaleWithCode } from '../../../services/shippingService';
 import { cancelSalePayment } from '../../../services/paymentService';
-import { supabase } from '../../../lib/supabaseClient';
 
-// Tipos de navegação
 type RootStackParamList = {
   MySales: undefined;
   SaleDetails: { saleId: string };
+  SaleSupport: { saleId: string; purchaseId: string; productId: string };
 };
 
 type SaleDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SaleDetails'>;
@@ -63,8 +68,15 @@ export function SaleDetailScreen() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [generatingLabel, setGeneratingLabel] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<'accept' | 'cancel' | null>(null);
+  const [confirmingDelivery, setConfirmingDelivery] = useState<string | null>(null);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [confirmationCode, setConfirmationCode] = useState('');
+  const [confirmationError, setConfirmationError] = useState('');
+  const [currentShippingId, setCurrentShippingId] = useState<string | null>(null);
+  
+  // Support tickets
+  const [supportTickets, setSupportTickets] = useState<StoreSupportTicket[]>([]);
 
-  // Buscar detalhes da venda e frete
   const fetchSaleDetails = async () => {
     try {
       setLoading(true);
@@ -76,17 +88,25 @@ export function SaleDetailScreen() {
         console.log('Dados da venda carregados:', saleData);
         setSale(saleData);
 
-        // Buscar detalhes do frete SOMENTE se a venda estiver em processamento ou posterior
         if (saleData.purchase_id && ['processing', 'transport', 'delivered'].includes(saleData.status)) {
           console.log('Carregando detalhes do frete...');
           const shippingData = await getShippingDetails(saleData.purchase_id);
           setShippingDetails(shippingData);
         } else {
-          console.log('Não carregando frete - status:', saleData.status);
-          setShippingDetails([]); // Limpar detalhes de frete
+          setShippingDetails([]);
+        }
+
+        // Buscar tickets de suporte
+        if (saleData.purchase_id && saleData.product_id) {
+          console.log('Buscando tickets de suporte...');
+          const tickets = await getStoreTickets(
+            saleData.purchase_id.toString(),
+            saleData.product_id.toString()
+          );
+          setSupportTickets(tickets);
+          console.log('Tickets encontrados:', tickets.length);
         }
       } else {
-        console.log('Venda não encontrada');
         Alert.alert('Erro', 'Venda não encontrada', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
@@ -101,7 +121,58 @@ export function SaleDetailScreen() {
     }
   };
 
-  // Aceitar venda
+  const handleConfirmDelivery = async (shippingId: string) => {
+    const shippingDetail = shippingDetails.find(detail => detail.id.toString() === shippingId);
+    if (!shippingDetail || !sale) return;
+
+    setCurrentShippingId(shippingId);
+    setConfirmationCode('');
+    setConfirmationError('');
+    setShowConfirmationModal(true);
+  };
+
+  const processConfirmationWithCode = async () => {
+    if (!confirmationCode.trim()) {
+      setConfirmationError('Por favor, digite o código de confirmação');
+      return;
+    }
+
+    if (!currentShippingId || !sale) return;
+
+    const shippingDetail = shippingDetails.find(detail => detail.id.toString() === currentShippingId);
+    if (!shippingDetail) return;
+
+    try {
+      setConfirmingDelivery(currentShippingId);
+      setShowConfirmationModal(false);
+
+      const result = await confirmStoreDeliveryAndUpdateSaleWithCode(
+        sale.purchase_id,
+        shippingDetail.product_id,
+        sale.sale_id,
+        confirmationCode.trim().toUpperCase()
+      );
+
+      if (result.success) {
+        Alert.alert(
+          'Entrega Confirmada!',
+          result.message || 'A entrega foi confirmada e o status da venda foi atualizado para "Entregue".',
+          [{ text: 'OK', onPress: () => fetchSaleDetails() }]
+        );
+      } else {
+        Alert.alert('Erro', result.error || 'Não foi possível confirmar a entrega');
+      }
+    } catch (error) {
+      console.error('Erro ao confirmar entrega:', error);
+      Alert.alert('Erro', 'Erro inesperado ao confirmar entrega');
+    } finally {
+      setConfirmingDelivery(null);
+      setCurrentShippingId(null);
+      setConfirmationCode('');
+      setConfirmationError('');
+    }
+  };
+
   const handleAcceptSale = async () => {
     if (!sale) return;
 
@@ -117,16 +188,14 @@ export function SaleDetailScreen() {
             try {
               setActionLoading('accept');
 
-              // 1. Pagar etiquetas de frete usando a função do shippingService
               console.log('Pagando etiquetas para purchase:', sale.purchase_id);
               const paymentResult = await payShippingLabelsForPurchase(sale.purchase_id);
-              
+
               if (!paymentResult.success) {
                 Alert.alert('Erro', paymentResult.error || 'Erro ao pagar etiquetas de frete');
                 return;
               }
 
-              // 2. Atualizar status da venda para processing
               const statusResult = await updateSaleStatus(sale.sale_id, 'processing');
               if (!statusResult) {
                 Alert.alert('Erro', 'Erro ao atualizar status da venda');
@@ -134,7 +203,6 @@ export function SaleDetailScreen() {
               }
 
               Alert.alert('Sucesso', 'Venda aceita com sucesso! As etiquetas foram confirmadas!');
-              // Recarregar os dados da venda
               await fetchSaleDetails();
             } catch (error) {
               console.error('Erro ao aceitar venda:', error);
@@ -148,7 +216,6 @@ export function SaleDetailScreen() {
     );
   };
 
-  // Cancelar venda
   const handleCancelSale = async () => {
     if (!sale) return;
 
@@ -164,16 +231,14 @@ export function SaleDetailScreen() {
             try {
               setActionLoading('cancel');
 
-              // 1. Cancelar pagamento na Pagarme usando a função do paymentService
               console.log('Cancelando pagamento:', sale.gateway_order_id);
               const cancelResult = await cancelSalePayment(sale.gateway_order_id);
-              
+
               if (!cancelResult.success) {
                 Alert.alert('Erro', cancelResult.error || 'Erro ao cancelar pagamento');
                 return;
               }
 
-              // 2. Atualizar status da venda para canceled
               const statusResult = await updateSaleStatus(sale.sale_id, 'canceled');
               if (!statusResult) {
                 Alert.alert('Erro', 'Erro ao atualizar status da venda');
@@ -181,7 +246,6 @@ export function SaleDetailScreen() {
               }
 
               Alert.alert('Venda Cancelada', 'A venda foi cancelada e o pagamento será estornado para o cliente.');
-              // Recarregar os dados da venda
               await fetchSaleDetails();
             } catch (error) {
               console.error('Erro ao cancelar venda:', error);
@@ -195,20 +259,16 @@ export function SaleDetailScreen() {
     );
   };
 
-  // Atualizar status da venda (dropdown)
   const handleStatusUpdate = async (newStatus: StoreSale['status']) => {
     if (!sale) return;
 
     try {
       setUpdatingStatus(true);
-      console.log('Atualizando status para:', newStatus);
-
       const success = await updateSaleStatus(sale.sale_id, newStatus);
 
       if (success) {
         setSale({ ...sale, status: newStatus });
         Alert.alert('Sucesso', 'Status da venda atualizado com sucesso!');
-        // Recarregar detalhes para atualizar seção de frete se necessário
         await fetchSaleDetails();
       } else {
         Alert.alert('Erro', 'Não foi possível atualizar o status da venda');
@@ -222,9 +282,7 @@ export function SaleDetailScreen() {
     }
   };
 
-  const handleBackPress = () => {
-    navigation.goBack();
-  };
+  const handleBackPress = () => navigation.goBack();
 
   const handleStatusSelect = (status: StoreSale['status']) => {
     if (sale && status !== sale.status) {
@@ -241,75 +299,44 @@ export function SaleDetailScreen() {
     }
   };
 
-  // Gerar etiqueta
   const handleGenerateLabel = async (shippingId: string) => {
     const shippingDetail = shippingDetails.find(detail => detail.id.toString() === shippingId);
 
     if (!shippingDetail?.external_shipment_id) {
-      Alert.alert(
-        'Erro',
-        'ID do envio não encontrado. Não é possível gerar a etiqueta.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Erro', 'ID do envio não encontrado. Não é possível gerar a etiqueta.', [{ text: 'OK' }]);
       return;
     }
 
     try {
       setGeneratingLabel(shippingId);
-      console.log('Gerando etiqueta para shipment:', shippingDetail.external_shipment_id);
-
       const result = await generateShippingLabel(shippingDetail.external_shipment_id);
 
       if (result.success && result.pdfUrl) {
         setShippingDetails(prevDetails =>
           prevDetails.map(detail =>
-            detail.id.toString() === shippingId
-              ? { ...detail, label_url: result.pdfUrl }
-              : detail
+            detail.id.toString() === shippingId ? { ...detail, label_url: result.pdfUrl } : detail
           )
         );
 
         const canOpen = await Linking.canOpenURL(result.pdfUrl);
-
         if (canOpen) {
           Alert.alert(
             'Etiqueta Gerada',
             'A etiqueta foi gerada com sucesso! Deseja abrir o arquivo PDF?',
             [
               { text: 'Cancelar', style: 'cancel' },
-              {
-                text: 'Abrir PDF',
-                onPress: () => Linking.openURL(result.pdfUrl!)
-              }
+              { text: 'Abrir PDF', onPress: () => Linking.openURL(result.pdfUrl!) }
             ]
-          );
-        } else {
-          Alert.alert(
-            'Etiqueta Gerada',
-            'A etiqueta foi gerada com sucesso, mas não foi possível abrir automaticamente. Você pode acessar o link: ' + result.pdfUrl,
-            [{ text: 'OK' }]
           );
         }
       } else if (result.needsGeneration) {
-        Alert.alert(
-          'Solicitação Enviada',
-          result.error || 'A solicitação de etiqueta foi enviada! Aguarde 1 minuto e tente novamente.',
-          [{ text: 'OK' }]
-        );
+        Alert.alert('Solicitação Enviada', result.error || 'A solicitação de etiqueta foi enviada!', [{ text: 'OK' }]);
       } else {
-        Alert.alert(
-          'Erro ao Gerar Etiqueta',
-          result.error || 'Erro desconhecido ao gerar a etiqueta.',
-          [{ text: 'OK' }]
-        );
+        Alert.alert('Erro ao Gerar Etiqueta', result.error || 'Erro desconhecido.', [{ text: 'OK' }]);
       }
     } catch (error) {
       console.error('Erro ao gerar etiqueta:', error);
-      Alert.alert(
-        'Erro',
-        'Ocorreu um erro inesperado ao gerar a etiqueta. Tente novamente mais tarde.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Erro', 'Erro inesperado ao gerar a etiqueta.', [{ text: 'OK' }]);
     } finally {
       setGeneratingLabel(null);
     }
@@ -321,23 +348,14 @@ export function SaleDetailScreen() {
       if (canOpen) {
         await Linking.openURL(labelUrl);
       } else {
-        Alert.alert(
-          'Link da Etiqueta',
-          'Não foi possível abrir automaticamente. Link: ' + labelUrl,
-          [{ text: 'OK' }]
-        );
+        Alert.alert('Link da Etiqueta', 'Não foi possível abrir automaticamente. Link: ' + labelUrl, [{ text: 'OK' }]);
       }
     } catch (error) {
       console.error('Erro ao abrir etiqueta:', error);
-      Alert.alert(
-        'Erro',
-        'Não foi possível abrir a etiqueta.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Erro', 'Não foi possível abrir a etiqueta.', [{ text: 'OK' }]);
     }
   };
 
-  // Formatadores
   const formatPrice = (price: number) => {
     return `R$ ${(price / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
   };
@@ -367,56 +385,53 @@ export function SaleDetailScreen() {
     return 'À vista';
   };
 
-  // Renderizar botões de ação fixos no final - SOMENTE aparece quando status é 'paid'
-  const renderFixedActionButtons = () => {
-    if (!sale || sale.status !== 'paid') {
-      return null;
-    }
+  const ConfirmationModal = ({ visible, confirmationCode, confirmationError, onChangeText, onCancel, onConfirm }: any) => (
+    <Modal visible={visible} animationType="fade" transparent={true} onRequestClose={onCancel}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Código de Confirmação</Text>
+            <Text style={styles.modalDescription}>
+              Solicite ao cliente o código de confirmação para finalizar a entrega:
+            </Text>
 
-    return (
-      <View style={styles.fixedButtonsContainer}>
-        <TouchableOpacity
-          style={[
-            styles.fixedActionButton,
-            styles.cancelButton,
-            actionLoading !== null && styles.fixedActionButtonDisabled
-          ]}
-          onPress={handleCancelSale}
-          disabled={actionLoading !== null}
-          activeOpacity={0.8}
-        >
-          {actionLoading === 'cancel' ? (
-            <View style={styles.buttonLoadingContainer}>
-              <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.fixedActionButtonText}>Cancelando...</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={[styles.codeInput, confirmationError ? styles.codeInputError : null]}
+                value={confirmationCode}
+                onChangeText={onChangeText}
+                placeholder="Digite o código"
+                placeholderTextColor="#999"
+                maxLength={6}
+                autoCapitalize="characters"
+                autoFocus={true}
+                textAlign="center"
+              />
+              {confirmationError ? <Text style={styles.errorText}>{confirmationError}</Text> : null}
             </View>
-          ) : (
-            <Text style={styles.fixedActionButtonText}>Cancelar Venda</Text>
-          )}
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.fixedActionButton,
-            styles.acceptButton,
-            actionLoading !== null && styles.fixedActionButtonDisabled
-          ]}
-          onPress={handleAcceptSale}
-          disabled={actionLoading !== null}
-          activeOpacity={0.8}
-        >
-          {actionLoading === 'accept' ? (
-            <View style={styles.buttonLoadingContainer}>
-              <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.fixedActionButtonText}>Processando...</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={[styles.modalButton, styles.cancelModalButton]} onPress={onCancel}>
+                <Text style={styles.cancelModalButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.confirmModalButton,
+                  !confirmationCode.trim() && styles.confirmModalButtonDisabled
+                ]}
+                onPress={onConfirm}
+                disabled={!confirmationCode.trim()}
+              >
+                <Text style={styles.confirmModalButtonText}>Confirmar</Text>
+              </TouchableOpacity>
             </View>
-          ) : (
-            <Text style={styles.fixedActionButtonText}>Aceitar Venda</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    );
-  };
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
 
   useEffect(() => {
     if (saleId) {
@@ -448,7 +463,7 @@ export function SaleDetailScreen() {
           <SimpleHeader title="Detalhes da Venda" onBack={handleBackPress} />
         </View>
         <View style={styles.loadingContainer}>
-          <Text style={styles.errorText}>Venda não encontrada</Text>
+          <Text style={styles.errorTextMain}>Venda não encontrada</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
             <Text style={styles.retryButtonText}>Voltar</Text>
           </TouchableOpacity>
@@ -459,18 +474,12 @@ export function SaleDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.container, getWebStyles()]}>
-      {/* Header */}
       <View style={styles.header}>
         <SimpleHeader title="Detalhes da Venda" onBack={handleBackPress} />
       </View>
 
-      <ScrollView 
-        style={styles.scrollView} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContentContainer}
-      >
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.contentContainer}>
-          {/* Status Pill */}
           <View style={styles.statusRow}>
             <TouchableOpacity
               style={[styles.statusPill, { backgroundColor: statusColors[sale.status] }]}
@@ -482,57 +491,31 @@ export function SaleDetailScreen() {
                 {statusLabels[sale.status]}
                 {sale.status !== 'canceled' && <Text style={styles.statusPillArrow}> ▼</Text>}
               </Text>
-              {updatingStatus && (
-                <ActivityIndicator
-                  size="small"
-                  color="#fff"
-                  style={styles.statusLoader}
-                />
-              )}
+              {updatingStatus && <ActivityIndicator size="small" color="#fff" style={styles.statusLoader} />}
             </TouchableOpacity>
           </View>
 
-          {/* Sale Details */}
           <Text style={styles.sectionTitle}>Detalhes da venda:</Text>
           <View style={styles.card}>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>Código:</Text> #{sale.sale_id}
-            </Text>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>Data da venda:</Text> {formatDate(sale.sale_date)}
-            </Text>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>Pagamento:</Text> {getPaymentText(sale)}
-            </Text>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>Quantidade:</Text> {sale.quantity}
-            </Text>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>Valor total:</Text> {formatPrice(sale.amount)}
-            </Text>
+            <Text style={styles.cardLine}><Text style={styles.cardLabel}>Código:</Text> #{sale.sale_id}</Text>
+            <Text style={styles.cardLine}><Text style={styles.cardLabel}>Data da venda:</Text> {formatDate(sale.sale_date)}</Text>
+            <Text style={styles.cardLine}><Text style={styles.cardLabel}>Pagamento:</Text> {getPaymentText(sale)}</Text>
+            <Text style={styles.cardLine}><Text style={styles.cardLabel}>Quantidade:</Text> {sale.quantity}</Text>
+            <Text style={styles.cardLine}><Text style={styles.cardLabel}>Valor total:</Text> {formatPrice(sale.amount)}</Text>
             {sale.shipping_fee > 0 && (
-              <Text style={styles.cardLine}>
-                <Text style={styles.cardLabel}>Frete:</Text> {formatPrice(sale.shipping_fee)}
-              </Text>
+              <Text style={styles.cardLine}><Text style={styles.cardLabel}>Frete:</Text> {formatPrice(sale.shipping_fee)}</Text>
             )}
             {sale.gateway_order_id && (
-              <Text style={styles.cardLine}>
-                <Text style={styles.cardLabel}>ID Gateway:</Text> {sale.gateway_order_id}
-              </Text>
+              <Text style={styles.cardLine}><Text style={styles.cardLabel}>ID Gateway:</Text> {sale.gateway_order_id}</Text>
             )}
           </View>
 
-          {/* Product Details */}
           <Text style={styles.sectionTitle}>Produto:</Text>
           <View style={styles.card}>
             <View style={styles.productRow}>
               <View style={styles.productImageContainer}>
                 {sale.product_image_url ? (
-                  <Image
-                    source={{ uri: sale.product_image_url }}
-                    style={styles.productImage}
-                    resizeMode="cover"
-                  />
+                  <Image source={{ uri: sale.product_image_url }} style={styles.productImage} resizeMode="cover" />
                 ) : (
                   <View style={styles.productImagePlaceholder}>
                     <Text style={styles.placeholderText}>Sem imagem</Text>
@@ -542,9 +525,7 @@ export function SaleDetailScreen() {
               <View style={styles.productInfo}>
                 <Text style={styles.productTitle}>{sale.product_name}</Text>
                 {sale.product_description && (
-                  <Text style={styles.productDescription} numberOfLines={2}>
-                    {sale.product_description}
-                  </Text>
+                  <Text style={styles.productDescription} numberOfLines={2}>{sale.product_description}</Text>
                 )}
                 <Text style={styles.productPrice}>{formatPrice(sale.product_price)}</Text>
                 <Text style={styles.productInstallment}>{getInstallmentText(sale)}</Text>
@@ -552,119 +533,197 @@ export function SaleDetailScreen() {
             </View>
           </View>
 
-          {/* Shipping Details - SÓ APARECE se status for 'processing', 'transport' ou 'delivered' */}
           {shippingDetails.length > 0 && ['processing', 'transport', 'delivered'].includes(sale.status) && (
             <>
-              <Text style={styles.sectionTitle}>Informações de Frete:</Text>
+              <Text style={styles.sectionTitle}>Informações de Entrega:</Text>
               {shippingDetails.map((shipping, index) => (
-                <View key={index} style={styles.card}>
-                  <Text style={styles.cardLine}>
-                    <Text style={styles.cardLabel}>Transportadora:</Text> {shipping.carrier}
-                  </Text>
-                  <Text style={styles.cardLine}>
-                    <Text style={styles.cardLabel}>Status do Envio:</Text> {shipping.status}
-                  </Text>
-                  <Text style={styles.cardLine}>
-                    <Text style={styles.cardLabel}>Valor do Frete:</Text> {formatPrice(shipping.shipping_fee)}
-                  </Text>
-                  <Text style={styles.cardLine}>
-                    <Text style={styles.cardLabel}>Código de Rastreio:</Text> {shipping.tracking_code || 'Ainda não gerado'}
-                  </Text>
-
-                  {/* Generate/Open Label Button */}
-                  <TouchableOpacity
-                    style={[
-                      styles.labelButton,
-                      (!shipping.external_shipment_id) && styles.labelButtonDisabled
-                    ]}
-                    onPress={() => {
-                      if (shipping.label_url) {
-                        handleOpenLabel(shipping.label_url);
-                      } else {
-                        handleGenerateLabel(shipping.id.toString());
-                      }
-                    }}
-                    disabled={!shipping.external_shipment_id || generatingLabel === shipping.id.toString()}
-                  >
-                    {generatingLabel === shipping.id.toString() ? (
-                      <View style={styles.labelButtonLoading}>
-                        <ActivityIndicator size="small" color="#fff" />
-                        <Text style={[styles.labelButtonText, { marginLeft: wp('2%') }]}>
-                          Processando...
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={[
-                        styles.labelButtonText,
-                        (!shipping.external_shipment_id) && styles.labelButtonTextDisabled
-                      ]}>
-                        {shipping.label_url ? 'Abrir Etiqueta' : 'Gerar Etiqueta'}
+                <View key={index} style={styles.shipmentCard}>
+                  <View style={styles.shipmentHeader}>
+                    <Text style={styles.shipmentProduct}>{sale.product_name}</Text>
+                    <View style={[
+                      styles.shipmentStatusPill,
+                      { backgroundColor: shipping.status === 'picked_up' ? '#4CAF50' : '#007AFF' }
+                    ]}>
+                      <Text style={styles.shipmentStatusText}>
+                        {shipping.status === 'picked_up' ? 'Retirado' : 'Disponível'}
                       </Text>
-                    )}
-                  </TouchableOpacity>
+                    </View>
+                  </View>
 
-                  {!shipping.external_shipment_id && (
-                    <Text style={styles.warningText}>
-                      * Etiqueta não disponível - Envio não processado pelo sistema
-                    </Text>
+                  {shipping.type === 'store_pickup' ? (
+                    <View>
+                      <Text style={styles.cardLine}><Text style={styles.cardLabel}>Tipo de Entrega:</Text> Retirada na Loja</Text>
+
+                      {shipping.status !== 'picked_up' && (
+                        <TouchableOpacity
+                          style={[
+                            styles.confirmPickupButton,
+                            confirmingDelivery === shipping.id.toString() && styles.confirmPickupButtonDisabled
+                          ]}
+                          onPress={() => handleConfirmDelivery(shipping.id.toString())}
+                          disabled={confirmingDelivery === shipping.id.toString()}
+                        >
+                          {confirmingDelivery === shipping.id.toString() ? (
+                            <View style={styles.confirmPickupButtonLoading}>
+                              <ActivityIndicator size="small" color="#fff" />
+                              <Text style={[styles.confirmPickupButtonText, { marginLeft: wp('2%') }]}>Confirmando...</Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.confirmPickupButtonText}>Confirmar Entrega</Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+
+                      {shipping.status === 'picked_up' && (
+                        <View style={styles.pickupCompletedContainer}>
+                          <Text style={styles.pickupCompletedText}>✅ Produto entregue na loja</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    <View>
+                      <Text style={styles.cardLine}><Text style={styles.cardLabel}>Transportadora:</Text> {shipping.carrier}</Text>
+                      <Text style={styles.cardLine}><Text style={styles.cardLabel}>Valor do Frete:</Text> {formatPrice(shipping.shipping_fee)}</Text>
+                      <Text style={styles.cardLine}><Text style={styles.cardLabel}>Código de Rastreio:</Text> {shipping.tracking_code || 'Ainda não gerado'}</Text>
+                      <Text style={styles.cardLine}><Text style={styles.cardLabel}>Tipo de Entrega:</Text> Envio Normal</Text>
+
+                      <TouchableOpacity
+                        style={[styles.labelButton, (!shipping.external_shipment_id) && styles.labelButtonDisabled]}
+                        onPress={() => {
+                          if (shipping.label_url) {
+                            handleOpenLabel(shipping.label_url);
+                          } else {
+                            handleGenerateLabel(shipping.id.toString());
+                          }
+                        }}
+                        disabled={!shipping.external_shipment_id || generatingLabel === shipping.id.toString()}
+                      >
+                        {generatingLabel === shipping.id.toString() ? (
+                          <View style={styles.labelButtonLoading}>
+                            <ActivityIndicator size="small" color="#fff" />
+                            <Text style={[styles.labelButtonText, { marginLeft: wp('2%') }]}>Processando...</Text>
+                          </View>
+                        ) : (
+                          <Text style={[styles.labelButtonText, (!shipping.external_shipment_id) && styles.labelButtonTextDisabled]}>
+                            {shipping.label_url ? 'Abrir Etiqueta' : 'Gerar Etiqueta'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+
+                      {!shipping.external_shipment_id && (
+                        <Text style={styles.warningText}>* Etiqueta não disponível - Envio não processado pelo sistema</Text>
+                      )}
+                    </View>
                   )}
                 </View>
               ))}
             </>
           )}
 
-          {/* Buyer Details */}
           <Text style={styles.sectionTitle}>Detalhes do comprador:</Text>
           <View style={styles.card}>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>Endereço:</Text> {sale.customer_address}
-            </Text>
+            <Text style={styles.cardLine}><Text style={styles.cardLabel}>Endereço:</Text> {sale.customer_address}</Text>
             {sale.customer_number && (
-              <Text style={styles.cardLine}>
-                <Text style={styles.cardLabel}>Número:</Text> {sale.customer_number}
-              </Text>
+              <Text style={styles.cardLine}><Text style={styles.cardLabel}>Número:</Text> {sale.customer_number}</Text>
             )}
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>Bairro:</Text> {sale.customer_neighborhood}
-            </Text>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>Cidade:</Text> {sale.customer_city} - {sale.customer_state}
-            </Text>
-            <Text style={styles.cardLine}>
-              <Text style={styles.cardLabel}>CEP:</Text> {sale.customer_zipcode}
-            </Text>
+            <Text style={styles.cardLine}><Text style={styles.cardLabel}>Bairro:</Text> {sale.customer_neighborhood}</Text>
+            <Text style={styles.cardLine}><Text style={styles.cardLabel}>Cidade:</Text> {sale.customer_city} - {sale.customer_state}</Text>
+            <Text style={styles.cardLine}><Text style={styles.cardLabel}>CEP:</Text> {sale.customer_zipcode}</Text>
           </View>
 
-          {/* Purchase Details */}
-          {sale.purchase_id && (
-            <>
-              <Text style={styles.sectionTitle}>Detalhes da compra:</Text>
-              <View style={styles.card}>
-                <Text style={styles.cardLine}>
-                  <Text style={styles.cardLabel}>ID da Compra:</Text> {sale.purchase_id}
-                </Text>
-                <Text style={styles.cardLine}>
-                  <Text style={styles.cardLabel}>Data da Compra:</Text> {formatDate(sale.purchase_date)}
-                </Text>
-                <Text style={styles.cardLine}>
-                  <Text style={styles.cardLabel}>Valor da Compra:</Text> {formatPrice(sale.purchase_amount)}
-                </Text>
-                <Text style={styles.cardLine}>
-                  <Text style={styles.cardLabel}>Status da Compra:</Text> {sale.purchase_status}
-                </Text>
+          {/* Seção de Tickets de Suporte */}
+          {supportTickets.length > 0 && (
+            <View style={styles.supportSection}>
+              <View style={styles.supportHeader}>
+                <Text style={styles.sectionTitle}>Tickets de Suporte ({supportTickets.length})</Text>
+                <TouchableOpacity
+                  style={styles.viewAllButton}
+                  onPress={() => navigation.navigate('SaleSupport' as never, {
+                    saleId: sale.sale_id,
+                    purchaseId: sale.purchase_id,
+                    productId: sale.product_id
+                  } as never)}
+                >
+                  <Text style={styles.viewAllButtonText}>Ver Todos →</Text>
+                </TouchableOpacity>
               </View>
-            </>
+              
+              <Text style={styles.supportDescription}>
+                O cliente abriu {supportTickets.length} ticket{supportTickets.length > 1 ? 's' : ''} de suporte para este produto
+              </Text>
+              
+              <TouchableOpacity
+                style={styles.supportCardPreview}
+                onPress={() => navigation.navigate('SaleSupport' as never, {
+                  saleId: sale.sale_id,
+                  purchaseId: sale.purchase_id,
+                  productId: sale.product_id
+                } as never)}
+              >
+                <Text style={styles.supportCardText}>
+                  Clique aqui para visualizar e responder os tickets
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
 
-          {/* Espaçamento extra para os botões fixos quando eles aparecem */}
-          {sale.status === 'paid' && <View style={styles.bottomSpacer} />}
+          {sale.status === 'paid' && (
+            <View style={styles.actionButtonsContainer}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.cancelButton, actionLoading !== null && styles.actionButtonDisabled]}
+                onPress={handleCancelSale}
+                disabled={actionLoading !== null}
+                activeOpacity={0.8}
+              >
+                {actionLoading === 'cancel' ? (
+                  <View style={styles.buttonLoadingContainer}>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.actionButtonText}>Cancelando...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.actionButtonText}>Cancelar Venda</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionButton, styles.acceptButton, actionLoading !== null && styles.actionButtonDisabled]}
+                onPress={handleAcceptSale}
+                disabled={actionLoading !== null}
+                activeOpacity={0.8}
+              >
+                {actionLoading === 'accept' ? (
+                  <View style={styles.buttonLoadingContainer}>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.actionButtonText}>Processando...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.actionButtonText}>Aceitar Venda</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </ScrollView>
 
-      {/* Botões de ação fixos no final da tela */}
-      {renderFixedActionButtons()}
+      <ConfirmationModal
+        visible={showConfirmationModal}
+        confirmationCode={confirmationCode}
+        confirmationError={confirmationError}
+        onChangeText={(text: string) => {
+          setConfirmationCode(text.toUpperCase());
+          if (confirmationError && text.trim()) {
+            setConfirmationError('');
+          }
+        }}
+        onCancel={() => {
+          setShowConfirmationModal(false);
+          setCurrentShippingId(null);
+          setConfirmationCode('');
+          setConfirmationError('');
+        }}
+        onConfirm={processConfirmationWithCode}
+      />
 
-      {/* Status Dropdown Modal */}
       {dropdownOpen && (
         <View style={styles.dropdownOverlay}>
           <Pressable style={styles.overlayTouchable} onPress={() => setDropdownOpen(false)} />
@@ -702,38 +761,35 @@ export function SaleDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('2%'),
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('1%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('1%') }),
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: {
     marginTop: hp('2%'),
     fontSize: wp('4%'),
     fontFamily: fonts.regular400,
     color: '#666',
   },
-  errorText: {
+  errorTextMain: {
     fontSize: wp('4.5%'),
     fontFamily: fonts.semiBold600,
     color: '#666',
     textAlign: 'center',
     marginBottom: hp('2%'),
+  },
+  errorText: {
+    fontSize: wp('3%'),
+    fontFamily: fonts.regular400,
+    color: '#FF3B30',
+    marginTop: hp('0.5%'),
+    textAlign: 'center',
   },
   retryButton: {
     backgroundColor: '#22D883',
@@ -748,21 +804,12 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    ...(isWeb && {
-      marginHorizontal: wp('2%'),
-    }),
-  },
-  scrollContentContainer: {
-    flexGrow: 1,
-    paddingBottom: hp('2%'), // Espaço extra para os botões fixos
+    ...(isWeb && { marginHorizontal: wp('2%') }),
   },
   contentContainer: {
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('2%'),
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('1%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('1%') }),
   },
   statusRow: {
     flexDirection: 'row',
@@ -775,41 +822,28 @@ const styles = StyleSheet.create({
     paddingVertical: hp('.8%'),
     alignItems: 'center',
     flexDirection: 'row',
-    ...(isWeb && {
-      paddingHorizontal: wp('4%'),
-      paddingVertical: hp('1%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('4%'), paddingVertical: hp('1%') }),
   },
   statusPillText: {
     color: '#fff',
     fontSize: wp('4%'),
     fontFamily: fonts.regular400,
-    ...(isWeb && {
-      fontSize: wp('3%'),
-    }),
+    ...(isWeb && { fontSize: wp('3%') }),
   },
   statusPillArrow: {
     fontFamily: fonts.regular400,
     color: '#fff',
     fontSize: wp('3.5%'),
-    ...(isWeb && {
-      fontSize: wp('2.5%'),
-    }),
+    ...(isWeb && { fontSize: wp('2.5%') }),
   },
-  statusLoader: {
-    marginLeft: wp('2%'),
-  },
+  statusLoader: { marginLeft: wp('2%') },
   sectionTitle: {
     fontSize: wp('4%'),
     fontFamily: fonts.bold700,
     color: '#222',
     marginTop: hp('2%'),
     marginBottom: hp('1%'),
-    ...(isWeb && {
-      fontSize: wp('3.2%'),
-      marginTop: hp('1.2%'),
-      marginBottom: hp('0.5%'),
-    }),
+    ...(isWeb && { fontSize: wp('3.2%'), marginTop: hp('1.2%'), marginBottom: hp('0.5%') }),
   },
   card: {
     backgroundColor: '#fff',
@@ -824,11 +858,7 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: '#F0F0F0',
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingVertical: hp('1.5%'),
-      marginBottom: hp('1.2%'),
-    }),
+    ...(isWeb && { paddingHorizontal: wp('3%'), paddingVertical: hp('1.5%'), marginBottom: hp('1.2%') }),
   },
   cardLine: {
     fontSize: wp('4%'),
@@ -836,35 +866,17 @@ const styles = StyleSheet.create({
     color: '#222',
     marginBottom: hp('0.5%'),
     lineHeight: wp('5.5%'),
-    ...(isWeb && {
-      fontSize: wp('3%'),
-      marginBottom: hp('0.2%'),
-      lineHeight: wp('4%'),
-    }),
+    ...(isWeb && { fontSize: wp('3%'), marginBottom: hp('0.2%'), lineHeight: wp('4%') }),
   },
-  cardLabel: {
-    fontFamily: fonts.bold700,
-    color: '#111',
-  },
-  productRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
+  cardLabel: { fontFamily: fonts.bold700, color: '#111' },
+  productRow: { flexDirection: 'row', alignItems: 'flex-start' },
   productImageContainer: {
     width: wp('18%'),
     height: wp('18%'),
     marginRight: wp('4%'),
-    ...(isWeb && {
-      width: wp('12%'),
-      height: wp('12%'),
-      marginRight: wp('2%'),
-    }),
+    ...(isWeb && { width: wp('12%'), height: wp('12%'), marginRight: wp('2%') }),
   },
-  productImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: wp('2%'),
-  },
+  productImage: { width: '100%', height: '100%', borderRadius: wp('2%') },
   productImagePlaceholder: {
     width: '100%',
     height: '100%',
@@ -878,23 +890,16 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular400,
     color: '#999',
     textAlign: 'center',
-    ...(isWeb && {
-      fontSize: wp('2%'),
-    }),
+    ...(isWeb && { fontSize: wp('2%') }),
   },
-  productInfo: {
-    flex: 1,
-  },
+  productInfo: { flex: 1 },
   productTitle: {
     fontSize: wp('4.5%'),
     fontFamily: fonts.bold700,
     color: '#222',
     marginBottom: hp('0.5%'),
     lineHeight: wp('5.5%'),
-    ...(isWeb && {
-      fontSize: wp('3.5%'),
-      lineHeight: wp('4.5%'),
-    }),
+    ...(isWeb && { fontSize: wp('3.5%'), lineHeight: wp('4.5%') }),
   },
   productDescription: {
     fontSize: wp('3.5%'),
@@ -902,29 +907,88 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: hp('0.5%'),
     lineHeight: wp('4.5%'),
-    ...(isWeb && {
-      fontSize: wp('2.8%'),
-      lineHeight: wp('3.8%'),
-    }),
+    ...(isWeb && { fontSize: wp('2.8%'), lineHeight: wp('3.8%') }),
   },
   productPrice: {
     fontSize: wp('5%'),
     fontFamily: fonts.bold700,
     color: '#22D883',
     marginBottom: hp('0.5%'),
-    ...(isWeb && {
-      fontSize: wp('4%'),
-    }),
+    ...(isWeb && { fontSize: wp('4%') }),
   },
   productInstallment: {
     fontSize: wp('3.5%'),
     fontFamily: fonts.regular400,
     color: '#666',
     lineHeight: wp('4.5%'),
-    ...(isWeb && {
-      fontSize: wp('2.8%'),
-      lineHeight: wp('3.8%'),
-    }),
+    ...(isWeb && { fontSize: wp('2.8%'), lineHeight: wp('3.8%') }),
+  },
+  shipmentCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: wp('3%'),
+    padding: wp('4%'),
+    marginBottom: hp('1.5%'),
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  shipmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: hp('1%'),
+  },
+  shipmentProduct: {
+    flex: 1,
+    fontSize: wp('4%'),
+    fontFamily: fonts.bold700,
+    color: '#222',
+    marginRight: wp('2%'),
+  },
+  shipmentStatusPill: {
+    borderRadius: wp('4%'),
+    paddingHorizontal: wp('3%'),
+    paddingVertical: hp('0.5%'),
+  },
+  shipmentStatusText: {
+    color: '#fff',
+    fontSize: wp('3%'),
+    fontFamily: fonts.semiBold600,
+  },
+  confirmPickupButton: {
+    backgroundColor: '#4CAF50',
+    borderRadius: wp('2%'),
+    paddingVertical: hp('1.2%'),
+    paddingHorizontal: wp('4%'),
+    marginTop: hp('1%'),
+    alignItems: 'center',
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  confirmPickupButtonDisabled: { backgroundColor: '#ccc' },
+  confirmPickupButtonText: {
+    color: '#fff',
+    fontSize: wp('3.8%'),
+    fontFamily: fonts.bold700,
+    textAlign: 'center',
+  },
+  confirmPickupButtonLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pickupCompletedContainer: {
+    backgroundColor: '#e8f5e8',
+    borderRadius: wp('2%'),
+    padding: wp('3%'),
+    marginTop: hp('1%'),
+    alignItems: 'center',
+  },
+  pickupCompletedText: {
+    color: '#2e7d32',
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.bold700,
   },
   labelButton: {
     backgroundColor: '#22D883',
@@ -933,25 +997,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp('4%'),
     marginTop: hp('1%'),
     alignItems: 'center',
-    ...(isWeb && {
-      paddingVertical: hp('1%'),
-      paddingHorizontal: wp('3%'),
-    }),
+    ...(isWeb && { paddingVertical: hp('1%'), paddingHorizontal: wp('3%') }),
   },
-  labelButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
+  labelButtonDisabled: { backgroundColor: '#ccc' },
   labelButtonText: {
     color: '#fff',
     fontSize: wp('3.5%'),
     fontFamily: fonts.semiBold600,
-    ...(isWeb && {
-      fontSize: wp('2.8%'),
-    }),
+    ...(isWeb && { fontSize: wp('2.8%') }),
   },
-  labelButtonTextDisabled: {
-    color: '#999',
-  },
+  labelButtonTextDisabled: { color: '#999' },
   labelButtonLoading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -962,37 +1017,61 @@ const styles = StyleSheet.create({
     color: '#FF6B35',
     marginTop: hp('0.5%'),
     fontStyle: 'italic',
-    ...(isWeb && {
-      fontSize: wp('2.5%'),
-    }),
+    ...(isWeb && { fontSize: wp('2.5%') }),
   },
-  // Novos estilos para botões fixos no final da página
-  fixedButtonsContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  supportSection: {
+    backgroundColor: '#FFF9E6',
+    borderRadius: wp('3%'),
+    padding: wp('4%'),
+    marginTop: hp('2%'),
+    marginBottom: hp('2%'),
+    borderWidth: 1,
+    borderColor: '#FFD700',
+  },
+  supportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: hp('1%'),
+  },
+  supportDescription: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.regular400,
+    color: '#856404',
+    marginBottom: hp('1.5%'),
+    lineHeight: wp('4.5%'),
+  },
+  viewAllButton: {
+    backgroundColor: '#FFA500',
+    borderRadius: wp('4%'),
+    paddingHorizontal: wp('3%'),
+    paddingVertical: hp('0.8%'),
+  },
+  viewAllButtonText: {
+    color: '#fff',
+    fontSize: wp('3.2%'),
+    fontFamily: fonts.semiBold600,
+  },
+  supportCardPreview: {
     backgroundColor: '#fff',
-    paddingHorizontal: wp('5%'),
-    paddingTop: hp('2%'),
-    paddingBottom: hp('3%'),
+    borderRadius: wp('2%'),
+    padding: wp('3%'),
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    alignItems: 'center',
+  },
+  supportCardText: {
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.semiBold600,
+    color: '#856404',
+  },
+  actionButtonsContainer: {
     flexDirection: 'row',
     gap: wp('3%'),
-    borderTopWidth: 1,
-    borderTopColor: '#E8E8E8',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 8,
-    ...(isWeb && {
-      paddingHorizontal: wp('3%'),
-      paddingTop: hp('1.5%'),
-      paddingBottom: hp('2%'),
-      gap: wp('2%'),
-    }),
+    marginTop: hp('2%'),
+    ...(isWeb && { gap: wp('2%') }),
   },
-  fixedActionButton: {
+  actionButton: {
     flex: 1,
     height: hp('6%'),
     borderRadius: wp('4%'),
@@ -1003,43 +1082,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
-    ...(isWeb && {
-      height: hp('5%'),
-      borderRadius: wp('3%'),
-    }),
+    ...(isWeb && { height: hp('5%'), borderRadius: wp('3%') }),
   },
-  acceptButton: {
-    backgroundColor: '#22D883',
-  },
-  cancelButton: {
-    backgroundColor: '#FF3B30',
-  },
-  fixedActionButtonDisabled: {
+  acceptButton: { backgroundColor: '#22D883' },
+  cancelButton: { backgroundColor: '#FF3B30' },
+  actionButtonDisabled: {
     opacity: 0.6,
     shadowOpacity: 0.05,
     elevation: 2,
   },
-  fixedActionButtonText: {
+  actionButtonText: {
     color: '#fff',
     fontSize: wp('4.2%'),
     fontFamily: fonts.bold700,
     textAlign: 'center',
     letterSpacing: 0.3,
-    ...(isWeb && {
-      fontSize: wp('3.2%'),
-    }),
+    ...(isWeb && { fontSize: wp('3.2%') }),
   },
   buttonLoadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: wp('2%'),
-  },
-  bottomSpacer: {
-    height: hp('10%'), // Espaço para os botões fixos quando eles aparecem
-    ...(isWeb && {
-      height: hp('8%'),
-    }),
   },
   dropdownOverlay: {
     position: 'absolute',
@@ -1075,22 +1139,14 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     zIndex: 101,
-    ...(isWeb && {
-      width: wp('35%'),
-      marginRight: wp('4%'),
-    }),
+    ...(isWeb && { width: wp('35%'), marginRight: wp('4%') }),
   },
   dropdownOption: {
     paddingVertical: hp('1.4%'),
     paddingHorizontal: wp('4%'),
-    ...(isWeb && {
-      paddingVertical: hp('1.2%'),
-      paddingHorizontal: wp('3%'),
-    }),
+    ...(isWeb && { paddingVertical: hp('1.2%'), paddingHorizontal: wp('3%') }),
   },
-  dropdownOptionSelected: {
-    backgroundColor: '#F0F9F5',
-  },
+  dropdownOptionSelected: { backgroundColor: '#F0F9F5' },
   dropdownOptionContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1100,23 +1156,117 @@ const styles = StyleSheet.create({
     height: wp('3%'),
     borderRadius: wp('1.5%'),
     marginRight: wp('3%'),
-    ...(isWeb && {
-      width: wp('2%'),
-      height: wp('2%'),
-      borderRadius: wp('1%'),
-      marginRight: wp('2%'),
-    }),
+    ...(isWeb && { width: wp('2%'), height: wp('2%'), borderRadius: wp('1%'), marginRight: wp('2%') }),
   },
   dropdownOptionText: {
     fontSize: wp('4%'),
     fontFamily: fonts.regular400,
     color: '#222',
-    ...(isWeb && {
-      fontSize: wp('3%'),
-    }),
+    ...(isWeb && { fontSize: wp('3%') }),
   },
   dropdownOptionTextSelected: {
     fontFamily: fonts.semiBold600,
     color: '#22D883',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: wp('5%'),
+  },
+  modalContainer: {
+    width: '100%',
+    maxWidth: wp('90%'),
+    backgroundColor: 'transparent',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: wp('4%'),
+    padding: wp('6%'),
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: wp('5%'),
+    fontFamily: fonts.bold700,
+    color: '#222',
+    marginBottom: hp('1%'),
+    textAlign: 'center',
+    ...(isWeb && { fontSize: wp('3.8%') }),
+  },
+  modalDescription: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: hp('3%'),
+    lineHeight: wp('5.5%'),
+    ...(isWeb && { fontSize: wp('3%'), lineHeight: wp('4%') }),
+  },
+  inputContainer: {
+    width: '100%',
+    marginBottom: hp('3%'),
+  },
+  codeInput: {
+    width: '100%',
+    height: hp('6%'),
+    borderWidth: 2,
+    borderColor: '#E1E5E9',
+    borderRadius: wp('3%'),
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: wp('4%'),
+    color: '#222',
+    letterSpacing: wp('0.5%'),
+    fontFamily: fonts.bold700,
+    fontSize: wp('5%'),
+    textAlign: 'center',
+    ...(isWeb && { height: hp('5%'), fontSize: wp('3.5%') }),
+  },
+  codeInputError: {
+    borderColor: '#FF3B30',
+    backgroundColor: '#FFF5F5',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: wp('3%'),
+    ...(isWeb && { gap: wp('2%') }),
+  },
+  modalButton: {
+    flex: 1,
+    height: hp('5.5%'),
+    borderRadius: wp('3%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(isWeb && { height: hp('5%') }),
+  },
+  cancelModalButton: {
+    backgroundColor: '#F1F3F4',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  confirmModalButton: {
+    backgroundColor: '#22D883',
+  },
+  confirmModalButtonDisabled: {
+    backgroundColor: '#D1D5DB',
+    opacity: 0.6,
+  },
+  cancelModalButtonText: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.semiBold600,
+    color: '#666',
+    ...(isWeb && { fontSize: wp('3%') }),
+  },
+  confirmModalButtonText: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.semiBold600,
+    color: '#fff',
+    ...(isWeb && { fontSize: wp('3%') }),
   },
 });

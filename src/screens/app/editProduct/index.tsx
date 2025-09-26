@@ -54,12 +54,13 @@ interface ProductDetail {
   brand_id?: number;
   brand_name?: string;
   status: 'active' | 'pending' | 'rejected' | 'inactive';
-  // Novos campos de frete
+  // Campos de frete
   height?: number;
   width?: number;
   length?: number;
   weight?: number;
   declared_value?: number;
+  allow_pickup?: boolean; // Nova propriedade
   product_images?: {
     id: string;
     url: string;
@@ -88,12 +89,13 @@ export function EditProductScreen() {
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   
-  // Novos estados para frete
+  // Estados para frete
   const [height, setHeight] = useState('');
   const [width, setWidth] = useState('');
   const [length, setLength] = useState('');
   const [weight, setWeight] = useState('');
   const [declaredValue, setDeclaredValue] = useState('');
+  const [pickupAvailable, setPickupAvailable] = useState(false); // Nova propriedade
   
   const [brands, setBrands] = useState<ProductBrand[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -158,6 +160,7 @@ export function EditProductScreen() {
       setLength(data.length ? data.length.toString().replace('.', ',') : '');
       setWeight(data.weight ? data.weight.toString().replace('.', ',') : '');
       setDeclaredValue(data.declared_value ? formatPriceFromCents(data.declared_value) : '');
+      setPickupAvailable(data.allow_pickup || false); // Nova propriedade
       
       if (data.product_images && data.product_images.length > 0) {
         const existingImages = data.product_images.map((img: any) => ({
@@ -250,7 +253,6 @@ export function EditProductScreen() {
     return decPart ? `${intPart},${decPart}` : intPart;
   };
 
-  // Função para formatar campos numéricos de frete
   const formatNumericField = (text: string) => {
     const cleanedText = text.replace(/[^\d,.]/g, '');
     
@@ -271,7 +273,6 @@ export function EditProductScreen() {
     return cleanedText;
   };
 
-  // Função para adicionar decimais automáticos
   const formatOnBlur = (value: string, setter: (val: string) => void, decimals: number = 2) => {
     if (!value) return;
     
@@ -301,6 +302,10 @@ export function EditProductScreen() {
   const handleStockChange = (text: string) => {
     const numericValue = text.replace(/[^0-9]/g, '');
     setStock(numericValue);
+  };
+
+  const togglePickupAvailable = () => {
+    setPickupAvailable(prev => !prev);
   };
 
   const handleStatusToggle = () => {
@@ -389,7 +394,6 @@ export function EditProductScreen() {
       return;
     }
 
-    // Validação dos campos de frete (opcionais)
     const heightValue = height ? parseFloat(height.replace(',', '.')) : null;
     const widthValue = width ? parseFloat(width.replace(',', '.')) : null;
     const lengthValue = length ? parseFloat(length.replace(',', '.')) : null;
@@ -426,6 +430,7 @@ export function EditProductScreen() {
           length: lengthValue,
           weight: weightValue,
           declared_value: declaredValueInCents,
+          allow_pickup: pickupAvailable, // Nova propriedade
         })
         .eq('id', productId);
 
@@ -711,6 +716,30 @@ export function EditProductScreen() {
             Configure as dimensões e peso para cálculo do frete (opcional)
           </Text>
 
+          {/* Opção de Retirada no Local */}
+          <View style={styles.pickupSection}>
+            <TouchableOpacity
+              style={styles.pickupOption}
+              onPress={togglePickupAvailable}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.checkbox,
+                pickupAvailable && styles.checkboxChecked
+              ]}>
+                {pickupAvailable && (
+                  <Text style={styles.checkmark}>✓</Text>
+                )}
+              </View>
+              <Text style={styles.pickupLabel}>
+                Permitir retirada no local da loja
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.pickupHelper}>
+              Ao ativar esta opção, os clientes poderão escolher retirar o produto diretamente no endereço da sua loja, sem custo de frete.
+            </Text>
+          </View>
+
           <Text style={styles.subLabel}>Dimensões (cm)</Text>
           
           <Text style={styles.label}>Altura:</Text>
@@ -900,6 +929,81 @@ const styles = StyleSheet.create({
     marginBottom: hp('2%'),
     lineHeight: wp('4.5%'),
     ...(isWeb && { fontSize: wp('2.8%'), lineHeight: wp('3.8%') }),
+  },
+
+  // Novos estilos para seção de retirada
+  pickupSection: {
+    marginBottom: hp('3%'),
+    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('3%'),
+    backgroundColor: '#F8F9FA',
+    borderRadius: wp('2%'),
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    ...(isWeb && {
+      marginBottom: hp('2%'),
+      paddingVertical: hp('1.5%'),
+      paddingHorizontal: wp('2%'),
+    }),
+  },
+
+  pickupOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: hp('1%'),
+  },
+
+  checkbox: {
+    width: wp('5%'),
+    height: wp('5%'),
+    borderWidth: 2,
+    borderColor: '#D6DBDE',
+    borderRadius: wp('1%'),
+    marginRight: wp('3%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    ...(isWeb && {
+      width: wp('4%'),
+      height: wp('4%'),
+      marginRight: wp('2%'),
+    }),
+  },
+
+  checkboxChecked: {
+    backgroundColor: '#22D883',
+    borderColor: '#22D883',
+  },
+
+  checkmark: {
+    color: '#fff',
+    fontSize: wp('3.5%'),
+    fontFamily: fonts.bold700,
+    ...(isWeb && {
+      fontSize: wp('2.8%'),
+    }),
+  },
+
+  pickupLabel: {
+    fontSize: wp('4%'),
+    fontFamily: fonts.bold700,
+    color: '#000000',
+    flex: 1,
+    ...(isWeb && {
+      fontSize: wp('3.2%'),
+    }),
+  },
+
+  pickupHelper: {
+    fontSize: wp('3.2%'),
+    fontFamily: fonts.regular400,
+    color: '#666',
+    lineHeight: wp('4.2%'),
+    marginTop: hp('0.5%'),
+    ...(isWeb && {
+      fontSize: wp('2.6%'),
+      lineHeight: wp('3.2%'),
+    }),
   },
 
   subLabel: {

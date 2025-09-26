@@ -15,6 +15,7 @@ export interface CartItem {
   storeId: string | null;
   storeUserId: string | null;
   storeName: string;
+  allow_pickup: boolean;
 }
 
 export interface CartSummary {

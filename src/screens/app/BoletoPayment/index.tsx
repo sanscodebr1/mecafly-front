@@ -285,16 +285,6 @@ export function BoletoPaymentScreen() {
           </Text>
         </View>
 
-        {/* Debug Info (removível em produção) */}
-        {__DEV__ && (
-          <View style={styles.debugContainer}>
-            <Text style={styles.debugTitle}>Debug Info (DEV only)</Text>
-            <Text style={styles.debugText}>Transaction ID: {params.boletoData.id}</Text>
-            <Text style={styles.debugText}>Gateway ID: {params.boletoData.gateway_id}</Text>
-            <Text style={styles.debugText}>Status: {params.boletoData.status}</Text>
-            <Text style={styles.debugText}>Success: {params.boletoData.success ? 'true' : 'false'}</Text>
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
