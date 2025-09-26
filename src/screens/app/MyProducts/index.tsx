@@ -18,6 +18,9 @@ import { Colors } from '../../../constants/colors';
 import { supabase } from '../../../lib/supabaseClient';
 import { getCurrentStoreProfile } from '../../../services/userProfiles';
 import { Image } from 'react-native';
+import { useAuth } from '../../../context/AuthContext';
+import { PaymentGatewayService } from '../../../services/paymentGateway';
+import { Alert } from 'react-native';
 
 type StatusKey = 'todos' | 'active' | 'pending' | 'rejected' | 'inactive';
 
@@ -52,16 +55,63 @@ interface ProductItem {
 export function MyProductsScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
+  const { user } = useAuth();
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusOpen, setStatusOpen] = useState(false);
   const [status, setStatus] = useState<StatusKey>('todos');
+  const [kycStatus, setKycStatus] = useState<{
+    hasAccount: boolean;
+    canSell: boolean;
+    needsKYC: boolean;
+  }>({
+    hasAccount: false,
+    canSell: false,
+    needsKYC: true,
+  });
 
   const handleBackPress = () => {
     navigation.navigate('SellerArea' as never);
   };
 
+  const checkKycStatus = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const status = await PaymentGatewayService.getGatewayStatus(user.id);
+      setKycStatus(status);
+    } catch (error) {
+      console.error('Erro ao verificar status KYC:', error);
+    }
+  };
+
   const handleRegisterProduct = () => {
+    // Verificar se pode vender
+    if (!kycStatus.hasAccount) {
+      Alert.alert(
+        'Configure sua conta de pagamento',
+        'Para vender produtos, você precisa primeiro configurar sua conta de pagamento.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Configurar', onPress: () => (navigation as any).navigate('PaymentGatewayRegistration', { context: 'store' }) }
+        ]
+      );
+      return;
+    }
+
+    if (!kycStatus.canSell) {
+      Alert.alert(
+        'Conta em análise',
+        'Você pode criar produtos em rascunho enquanto aguarda a aprovação da sua conta de pagamento. Os produtos só serão publicados após a aprovação.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Criar em rascunho', onPress: () => navigation.navigate('AddProduct' as never) }
+        ]
+      );
+      return;
+    }
+
+    // Se pode vender, continuar normalmente
     navigation.navigate('AddProduct' as never);
   };
 
@@ -104,6 +154,7 @@ export function MyProductsScreen() {
   // Load products on component mount
   useEffect(() => {
     loadProducts();
+    checkKycStatus();
   }, []);
 
   // Reload products when screen comes into focus (after editing)

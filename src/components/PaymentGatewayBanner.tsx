@@ -16,6 +16,8 @@ interface PaymentGatewayBannerProps {
   onPressRegister: () => void;
   onClose?: () => void;
   showCloseButton?: boolean;
+  context?: 'store' | 'professional';
+  document?: string;
 }
 
 export function PaymentGatewayBanner({
@@ -23,6 +25,8 @@ export function PaymentGatewayBanner({
   onPressRegister,
   onClose,
   showCloseButton = false,
+  context,
+  document,
 }: PaymentGatewayBannerProps) {
   const getBannerConfig = (status: AccountGatewayStatus | null) => {
     switch (status) {
@@ -30,9 +34,9 @@ export function PaymentGatewayBanner({
         return {
           backgroundColor: '#E6F4EA',
           textColor: '#1E7D43',
-          message: 'Conta de pagamento aprovada. Você já pode vender.',
+          message: 'Conta de pagamento aprovada. Complete a validação de identidade para começar a vender.',
           primaryCta: undefined,
-          secondaryCta: accountGateway?.affiliation_url ? 'Prova de vida' : undefined,
+          secondaryCta: 'Fazer validação',
           showClose: true,
         };
       case 'pending':
@@ -66,30 +70,71 @@ export function PaymentGatewayBanner({
   };
 
   const handleAffiliationPress = async () => {
-    if (accountGateway?.affiliation_url) {
-      try {
+    try {
+      // Primeiro tentar usar o link existente
+      if (accountGateway?.affiliation_url) {
         const supported = await Linking.canOpenURL(accountGateway.affiliation_url);
         if (supported) {
           await Linking.openURL(accountGateway.affiliation_url);
-        } else {
-          Alert.alert(
-            'Erro',
-            'Não foi possível abrir o link de afiliação. Tente acessar pelo navegador.',
-            [
-              { text: 'OK' },
-              {
-                text: 'Copiar Link',
-                onPress: () => {
-                  Alert.alert('Link copiado!', accountGateway.affiliation_url);
-                },
-              },
-            ]
-          );
+          return;
         }
-      } catch (error) {
-        console.error('Erro ao abrir link de afiliação:', error);
-        Alert.alert('Erro', 'Não foi possível abrir o link de afiliação.');
       }
+
+      // Se não tem link ou não conseguiu abrir, gerar um novo
+      Alert.alert(
+        'Gerando link de validação',
+        'Estamos gerando seu link de validação de identidade...',
+        [],
+        { cancelable: false }
+      );
+
+      const { PaymentGatewayService } = await import('../services/paymentGateway');
+      const newLink = await PaymentGatewayService.getOrGenerateKycLink(
+        accountGateway?.user_id || '', 
+        document, 
+        context
+      );
+
+      if (newLink) {
+        Alert.alert(
+          'Link gerado!',
+          'Clique em "Abrir Link" para fazer sua validação de identidade.',
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Abrir Link',
+              onPress: async () => {
+                try {
+                  const supported = await Linking.canOpenURL(newLink);
+                  if (supported) {
+                    await Linking.openURL(newLink);
+                  } else {
+                    Alert.alert('Erro', 'Não foi possível abrir o link. Tente copiá-lo e acessar pelo navegador.');
+                  }
+                } catch (error) {
+                  console.error('Erro ao abrir link:', error);
+                  Alert.alert('Erro', 'Não foi possível abrir o link de validação.');
+                }
+              }
+            },
+            {
+              text: 'Copiar Link',
+              onPress: () => {
+                Alert.alert('Link copiado!', newLink);
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Erro',
+          'Não foi possível gerar o link de validação. Tente novamente mais tarde.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao gerar link de afiliação:', error);
+      Alert.alert('Erro', 'Não foi possível gerar o link de validação.');
     }
   };
 
@@ -107,7 +152,7 @@ export function PaymentGatewayBanner({
             </TouchableOpacity>
           )}
 
-          {config.secondaryCta && accountGateway?.affiliation_url && (
+          {config.secondaryCta && (
             <TouchableOpacity onPress={handleAffiliationPress} style={styles.linkButton}>
               <Text style={[styles.linkText, { color: config.textColor }]}>{config.secondaryCta}</Text>
             </TouchableOpacity>

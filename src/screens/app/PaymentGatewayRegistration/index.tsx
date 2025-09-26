@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { wp, hp, isWeb, getWebStyles } from '../../../utils/responsive';
 import { fonts } from '../../../constants/fonts';
 import { Colors } from '../../../constants/colors';
@@ -27,12 +27,19 @@ import {
 
 export function PaymentGatewayRegistrationScreen() {
   const navigation = useNavigation();
+  const route = useRoute<any>();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [accountGateway, setAccountGateway] = useState<any>(null);
 
   // Estados do formulário
   const [documentType, setDocumentType] = useState<'cpf' | 'cnpj'>('cpf');
+  const [showDocumentTypeSelector, setShowDocumentTypeSelector] = useState<boolean>(true);
+  const [isDocumentLocked, setIsDocumentLocked] = useState<boolean>(false);
+  const [representativeOccupation, setRepresentativeOccupation] = useState<string>('');
+  const [representativeMonthlyIncome, setRepresentativeMonthlyIncome] = useState<number>(0);
+  const [representativeCpf, setRepresentativeCpf] = useState<string>('');
+  const [representativeBirthdate, setRepresentativeBirthdate] = useState<string>(''); // DD/MM/AAAA
   const [formData, setFormData] = useState<Partial<RegisterInformation>>({
     email: '',
     document: '',
@@ -67,6 +74,7 @@ export function PaymentGatewayRegistrationScreen() {
       account_check_digit: '',
       type: 'checking' as const,
     },
+    managing_partners: [],
   });
 
   useEffect(() => {
@@ -83,15 +91,110 @@ export function PaymentGatewayRegistrationScreen() {
       user.professional_profile
     );
 
+    const context = route?.params?.context as ('store' | 'professional' | undefined);
+
+    // Se veio do fluxo de loja (vendedor), força CNPJ e trava o campo
+    if (context === 'store') {
+      setShowDocumentTypeSelector(false);
+      setIsDocumentLocked(true);
+      setDocumentType('cnpj');
+      setFormData(prev => ({
+        ...prev,
+        ...baseData,
+        document: (user.store_profile?.document || '').toString(),
+        type: 'corporation' as const,
+        name: (user.store_profile?.company_name || user.store_profile?.name || '').toString(),
+        phone_numbers: baseData.phone_numbers || [{ ddd: '', number: '', type: 'mobile' as const }],
+        default_bank_account: {
+          ...prev.default_bank_account!,
+          holder_document: (user.store_profile?.document || '').toString(),
+          holder_type: 'company' as const,
+        },
+      }));
+      return;
+    }
+
+    // Fluxo profissional: detectar automaticamente o tipo de documento baseado no perfil
+    if (context === 'professional' && user.professional_profile) {
+      const profDocument = user.professional_profile.document;
+      const profCompanyType = user.professional_profile.company_type;
+      
+      
+      // Determinar tipo de documento baseado no perfil
+      const isCnpj = profCompanyType === 'company' && profDocument && profDocument.length === 14;
+      const isCpf = profCompanyType === 'individual' || (profDocument && profDocument.length === 11);
+      
+      if (isCnpj) {
+        // Profissional com CNPJ
+        setShowDocumentTypeSelector(false);
+        setIsDocumentLocked(true);
+        setDocumentType('cnpj');
+        setFormData(prev => ({
+          ...prev,
+          ...baseData,
+          document: profDocument || '',
+          type: 'corporation' as const,
+          name: (user.professional_profile?.name || '').toString(),
+          phone_numbers: baseData.phone_numbers || [{ ddd: '', number: '', type: 'mobile' as const }],
+          default_bank_account: {
+            ...prev.default_bank_account!,
+            holder_document: profDocument || '',
+            holder_type: 'company' as const,
+          },
+        }));
+      } else if (isCpf) {
+        // Profissional com CPF
+        setShowDocumentTypeSelector(false);
+        setIsDocumentLocked(true);
+        setDocumentType('cpf');
+        setFormData(prev => ({
+          ...prev,
+          ...baseData,
+          document: profDocument || '',
+          type: 'individual' as const,
+          name: (user.professional_profile?.name || '').toString(),
+          phone_numbers: baseData.phone_numbers || [{ ddd: '', number: '', type: 'mobile' as const }],
+          default_bank_account: {
+            ...prev.default_bank_account!,
+            holder_document: profDocument || '',
+            holder_type: 'individual' as const,
+          },
+        }));
+      } else {
+        // Fallback: exibir seletores se não conseguir determinar
+        setShowDocumentTypeSelector(true);
+        setIsDocumentLocked(false);
+        setDocumentType('cpf');
+        setFormData(prev => ({
+          ...prev,
+          ...baseData,
+          document: '',
+          type: 'individual' as const,
+          phone_numbers: baseData.phone_numbers || [{ ddd: '', number: '', type: 'mobile' as const }],
+          default_bank_account: {
+            ...prev.default_bank_account!,
+            holder_document: '',
+            holder_type: 'individual' as const,
+          },
+        }));
+      }
+      return;
+    }
+
+    // Fluxo padrão: exibe seletores CPF/CNPJ e padrão CPF
+    setShowDocumentTypeSelector(true);
+    setIsDocumentLocked(false);
+    setDocumentType('cpf');
     setFormData(prev => ({
       ...prev,
       ...baseData,
+      document: '',
+      type: 'individual' as const,
       phone_numbers: baseData.phone_numbers || [{ ddd: '', number: '', type: 'mobile' as const }],
-      // Sincronizar documento com a conta bancária
       default_bank_account: {
         ...prev.default_bank_account!,
-        holder_document: baseData.document || '',
-        holder_type: baseData.default_bank_account?.holder_type || 'individual',
+        holder_document: '',
+        holder_type: 'individual' as const,
       },
     }));
   };
@@ -100,7 +203,22 @@ export function PaymentGatewayRegistrationScreen() {
     if (!user?.id) return;
 
     try {
-      const existingAccount = await PaymentGatewayService.getUserAccountGateway(user.id);
+      const context = route?.params?.context as ('store' | 'professional' | undefined);
+      
+      // Determinar o documento baseado no contexto
+      let document: string | undefined;
+      if (context === 'store' && user.store_profile?.document) {
+        document = user.store_profile.document;
+      } else if (context === 'professional' && user.professional_profile?.document) {
+        document = user.professional_profile.document;
+      }
+
+      const existingAccount = await PaymentGatewayService.getUserAccountGateway(
+        user.id, 
+        document, 
+        context
+      );
+      
       if (existingAccount) {
         setAccountGateway(existingAccount);
 
@@ -188,10 +306,10 @@ export function PaymentGatewayRegistrationScreen() {
       const newData = {
         ...prev,
         type: type === 'cpf' ? 'individual' as const : 'corporation' as const,
-        document: '', // Limpar documento ao trocar tipo
+        document: '',
         default_bank_account: {
           ...prev.default_bank_account!,
-          holder_document: '', // Será preenchido automaticamente quando o usuário digitar o documento
+          holder_document: '',
           holder_type: type === 'cpf' ? 'individual' as const : 'company' as const,
         },
       };
@@ -238,6 +356,25 @@ export function PaymentGatewayRegistrationScreen() {
       }
       if (!formData.annual_revenue || formData.annual_revenue <= 0) {
         Alert.alert('Erro', 'Faturamento anual é obrigatório');
+        return false;
+      }
+      // Sócio/representante: será enviado automaticamente (sem exigir lista na UI)
+      // Representante legal
+      if (!representativeOccupation || representativeOccupation.trim().length < 2) {
+        Alert.alert('Erro', 'Informe a profissão do representante legal');
+        return false;
+      }
+      if (!representativeMonthlyIncome || Number(representativeMonthlyIncome) <= 0) {
+        Alert.alert('Erro', 'Informe a renda mensal do representante legal');
+        return false;
+      }
+      const repCpfDigits = representativeCpf.replace(/\D/g, '');
+      if (!repCpfDigits || repCpfDigits.length !== 11) {
+        Alert.alert('Erro', 'Informe o CPF do representante legal (11 dígitos)');
+        return false;
+      }
+      if (!representativeBirthdate) {
+        Alert.alert('Erro', 'Informe a data de nascimento do representante legal');
         return false;
       }
     }
@@ -294,6 +431,22 @@ export function PaymentGatewayRegistrationScreen() {
   const handleSubmit = async () => {
     console.log('Iniciando criacao de conta gateway...');
 
+    // Regras de reuso de conta
+    const context = route?.params?.context as ('store' | 'professional' | undefined);
+    const storeCnpj = (user?.store_profile?.document || '').toString().replace(/\D/g, '');
+    const currentDoc = (formData.document || '').toString().replace(/\D/g, '');
+    const isCnpjFlow = documentType === 'cnpj' || formData.type === 'corporation';
+
+    // Reuso somente no fluxo profissional com CNPJ igual ao da loja
+    if (context === 'professional' && isCnpjFlow && storeCnpj && currentDoc && storeCnpj === currentDoc) {
+      Alert.alert(
+        'Conta já existente',
+        'Detectamos que o CNPJ informado é o mesmo da sua loja. A mesma conta de pagamento será utilizada.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+      return;
+    }
+
     if (!validateForm()) {
       console.log('Validacao do formulario falhou');
       return;
@@ -303,6 +456,14 @@ export function PaymentGatewayRegistrationScreen() {
     setLoading(true);
 
     try {
+      const toIsoDate = (brDate: string) => {
+        const numbers = (brDate || '').replace(/\D/g, '');
+        if (numbers.length === 8) {
+          return `${numbers.slice(4,8)}-${numbers.slice(2,4)}-${numbers.slice(0,2)}`;
+        }
+        return brDate; // fallback
+      };
+
       const registerData: RegisterInformation = {
         email: formData.email!,
         document: formData.document!,
@@ -317,7 +478,40 @@ export function PaymentGatewayRegistrationScreen() {
         monthly_income: formData.monthly_income!,
         professional_occupation: formData.professional_occupation!,
         address: formData.address!,
+        // Mapear automaticamente main_address para o schema da PagarMe
+        main_address: formData.address ? {
+          street: formData.address.street!,
+          street_number: formData.address.street_number!,
+          neighborhood: formData.address.neighborhood!,
+          city: formData.address.city!,
+          state: formData.address.state!,
+          zip_code: formData.address.zip_code!,
+          complementary: formData.address.complementary,
+          reference_point: formData.address.reference_point,
+        } : undefined,
         default_bank_account: formData.default_bank_account!,
+        // Enviar apenas 1 representante automaticamente quando CNPJ
+        managing_partners: (formData.type === 'corporation') ? [{
+          name: user?.customer_profile?.name || 'Representante Legal',
+          document: representativeCpf.replace(/\D/g, ''),
+          email: user?.email || undefined,
+          birthdate: toIsoDate(representativeBirthdate),
+          mother_name: undefined,
+          professional_occupation: representativeOccupation || 'Administrador',
+          monthly_income: Number(representativeMonthlyIncome) || 1000,
+          self_declared_legal_representative: true,
+          address: formData.address ? {
+            street: formData.address.street!,
+            street_number: formData.address.street_number!,
+            neighborhood: formData.address.neighborhood!,
+            city: formData.address.city!,
+            state: formData.address.state!,
+            zip_code: formData.address.zip_code!,
+            complementary: formData.address.complementary || 'N/A',
+            reference_point: formData.address.reference_point || 'N/A',
+          } : undefined,
+          phone_numbers: formData.phone_numbers,
+        }] : undefined,
       };
 
       console.log('Dados do formulario preparados:', {
@@ -327,10 +521,19 @@ export function PaymentGatewayRegistrationScreen() {
         name: registerData.name
       });
 
+      // Determinar qual perfil usar baseado no contexto
+      const context = route?.params?.context as ('store' | 'professional' | undefined);
+      const storeProfileId = context === 'store' ? user?.store_profile?.id : undefined;
+      const professionalProfileId = context === 'professional' ? user?.professional_profile?.id : undefined;
+
+      console.log('Criando conta gateway com contexto:', context);
+      console.log('Store profile id:', storeProfileId);
+      console.log('Professional profile id:', professionalProfileId);
+
       const result = await PaymentGatewayService.createAccountGateway({
         payment_gateway: 'pagarme',
-        store_profile_id: user?.store_profile?.id,
-        professional_profile_id: user?.professional_profile?.id,
+        store_profile_id: storeProfileId,
+        professional_profile_id: professionalProfileId,
         register_information: registerData,
       });
 
@@ -378,37 +581,39 @@ export function PaymentGatewayRegistrationScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Tipo de Conta</Text>
 
-            <View style={styles.documentTypeContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.documentTypeButton,
-                  documentType === 'cpf' && styles.documentTypeButtonActive
-                ]}
-                onPress={() => handleDocumentTypeChange('cpf')}
-              >
-                <Text style={[
-                  styles.documentTypeButtonText,
-                  documentType === 'cpf' && styles.documentTypeButtonTextActive
-                ]}>
-                  Pessoa Física (CPF)
-                </Text>
-              </TouchableOpacity>
+            {showDocumentTypeSelector && (
+              <View style={styles.documentTypeContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.documentTypeButton,
+                    documentType === 'cpf' && styles.documentTypeButtonActive
+                  ]}
+                  onPress={() => handleDocumentTypeChange('cpf')}
+                >
+                  <Text style={[
+                    styles.documentTypeButtonText,
+                    documentType === 'cpf' && styles.documentTypeButtonTextActive
+                  ]}>
+                    Pessoa Física (CPF)
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.documentTypeButton,
-                  documentType === 'cnpj' && styles.documentTypeButtonActive
-                ]}
-                onPress={() => handleDocumentTypeChange('cnpj')}
-              >
-                <Text style={[
-                  styles.documentTypeButtonText,
-                  documentType === 'cnpj' && styles.documentTypeButtonTextActive
-                ]}>
-                  Pessoa Jurídica (CNPJ)
-                </Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={[
+                    styles.documentTypeButton,
+                    documentType === 'cnpj' && styles.documentTypeButtonActive
+                  ]}
+                  onPress={() => handleDocumentTypeChange('cnpj')}
+                >
+                  <Text style={[
+                    styles.documentTypeButtonText,
+                    documentType === 'cnpj' && styles.documentTypeButtonTextActive
+                  ]}>
+                    Pessoa Jurídica (CNPJ)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <MaskedInputField
               label={documentType === 'cpf' ? 'CPF' : 'CNPJ'}
@@ -416,73 +621,53 @@ export function PaymentGatewayRegistrationScreen() {
               onChangeRaw={(value) => handleInputChange('document', value)}
               mask={documentType === 'cpf' ? 'cpf' : 'cnpj'}
               placeholder={documentType === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
+              editable={!isDocumentLocked}
             />
           </View>
 
-          {/* Dados Pessoais */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              {documentType === 'cpf' ? 'Dados pessoais' : 'Dados da empresa'}
-            </Text>
+          {/* Dados Pessoais (apenas CPF) */}
+          {documentType === 'cpf' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Dados pessoais</Text>
 
-            <InputField
-              label={documentType === 'cpf' ? 'Nome Completo' : 'Razão Social'}
-              value={formData.name || ''}
-              onChangeText={(value) => handleInputChange('name', value)}
-              placeholder={documentType === 'cpf' ? 'Digite seu nome completo' : 'Digite a razão social'}
-            />
+              <InputField
+                label={'Nome Completo'}
+                value={formData.name || ''}
+                onChangeText={(value) => handleInputChange('name', value)}
+                placeholder={'Digite seu nome completo'}
+              />
 
-            {documentType === 'cpf' ? (
               <InputField
                 label="Nome da Mãe"
                 value={formData.mother_name || ''}
                 onChangeText={(value) => handleInputChange('mother_name', value)}
                 placeholder="Digite o nome da sua mãe"
               />
-            ) : (
-              <InputField
-                label="Nome Fantasia"
-                value={formData.trading_name || ''}
-                onChangeText={(value) => handleInputChange('trading_name', value)}
-                placeholder="Digite o nome fantasia"
+
+              <MaskedInputField
+                label="Data de Nascimento"
+                rawValue={formData.birthdate || ''}
+                onChangeRaw={(value) => handleInputChange('birthdate', value)}
+                placeholder="DD/MM/AAAA"
+                mask="date"
               />
-            )}
 
-            {documentType === 'cpf' ? (
-              <>
-                <MaskedInputField
-                  label="Data de Nascimento"
-                  rawValue={formData.birthdate || ''}
-                  onChangeRaw={(value) => handleInputChange('birthdate', value)}
-                  placeholder="DD/MM/AAAA"
-                  mask="date"
-                />
-
-                <InputField
-                  label="Profissão"
-                  value={formData.professional_occupation || ''}
-                  onChangeText={(value) => handleInputChange('professional_occupation', value)}
-                  placeholder="Digite sua profissão"
-                />
-
-                <InputField
-                  label="Renda Mensal (R$)"
-                  value={formData.monthly_income?.toString() || ''}
-                  onChangeText={(value) => handleInputChange('monthly_income', parseFloat(value) || 0)}
-                  placeholder="0.00"
-                  keyboardType="numeric"
-                />
-              </>
-            ) : (
               <InputField
-                label="Faturamento Anual (R$)"
-                value={formData.annual_revenue?.toString() || ''}
-                onChangeText={(value) => handleInputChange('annual_revenue', parseFloat(value) || 0)}
+                label="Profissão"
+                value={formData.professional_occupation || ''}
+                onChangeText={(value) => handleInputChange('professional_occupation', value)}
+                placeholder="Digite sua profissão"
+              />
+
+              <InputField
+                label="Renda Mensal (R$)"
+                value={formData.monthly_income?.toString() || ''}
+                onChangeText={(value) => handleInputChange('monthly_income', parseFloat(value) || 0)}
                 placeholder="0.00"
                 keyboardType="numeric"
               />
-            )}
-          </View>
+            </View>
+          )}
 
           {/* Dados de Contato */}
           <View style={styles.section}>
@@ -534,7 +719,7 @@ export function PaymentGatewayRegistrationScreen() {
               <InputField
                 label="Número"
                 value={formData.address?.street_number || ''}
-                onChangeText={(value) => handleAddressChange('number', value)}
+                onChangeText={(value) => handleAddressChange('street_number', value)}
                 placeholder="123"
                 keyboardType="numeric"
                 containerStyle={styles.addressNumber}
@@ -631,8 +816,8 @@ export function PaymentGatewayRegistrationScreen() {
             />
           </View>
 
-          {/* Dados da Empresa (se aplicável) */}
-          {(user?.store_profile || formData.type === 'corporation') && (
+          {/* Dados da Empresa (apenas quando for CNPJ) */}
+          {formData.type === 'corporation' && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Dados da Empresa</Text>
 
@@ -654,6 +839,37 @@ export function PaymentGatewayRegistrationScreen() {
                 label="Faturamento Anual (R$)"
                 value={formData.annual_revenue?.toString() || ''}
                 onChangeText={(value) => handleInputChange('annual_revenue', parseFloat(value) || 0)}
+                placeholder="0.00"
+                keyboardType="numeric"
+              />
+
+              <MaskedInputField
+                label="CPF do representante legal"
+                rawValue={representativeCpf}
+                onChangeRaw={setRepresentativeCpf}
+                mask="cpf"
+                placeholder="000.000.000-00"
+              />
+
+              <MaskedInputField
+                label="Data de nascimento do representante legal"
+                rawValue={representativeBirthdate}
+                onChangeRaw={setRepresentativeBirthdate}
+                mask="date"
+                placeholder="DD/MM/AAAA"
+              />
+
+              <InputField
+                label="Profissão do representante legal"
+                value={representativeOccupation}
+                onChangeText={setRepresentativeOccupation}
+                placeholder="Ex.: Administrador"
+              />
+
+              <InputField
+                label="Renda mensal do representante legal (R$)"
+                value={String(representativeMonthlyIncome || '')}
+                onChangeText={(value) => setRepresentativeMonthlyIncome(Number(value) || 0)}
                 placeholder="0.00"
                 keyboardType="numeric"
               />

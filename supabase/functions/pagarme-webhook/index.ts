@@ -195,10 +195,11 @@ class WebhookService {
         case 'active':
           newStatus = 'approved';
           break;
-        case 'inactive':
         case 'rejected':
+        case 'inactive':
           newStatus = 'refused';
           break;
+        case 'pending':
         default:
           newStatus = 'pending';
       }

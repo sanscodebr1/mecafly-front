@@ -33,6 +33,46 @@ const PendingNotice: React.FC<{ typeLabel: string }> = ({ typeLabel }) => {
   );
 };
 
+// Função para verificar se o profissional precisa de conta de pagamento
+const checkIfNeedsPaymentAccount = async (user: any, profProfile: any): Promise<boolean> => {
+  if (!profProfile) {
+    console.log('Sem perfil profissional, retornando false');
+    return false;
+  }
+
+  const profDocument = profProfile.document;
+  const profCompanyType = profProfile.company_type;
+  
+  console.log('ProfDocument:', profDocument);
+  console.log('ProfCompanyType:', profCompanyType);
+
+  // Se profissional tem CPF, sempre precisa de conta separada
+  if (profCompanyType === 'individual' || !profCompanyType) {
+    console.log('Profissional com CPF, precisa de conta separada');
+    return true;
+  }
+
+  // Se profissional tem CNPJ, verificar se é o mesmo da store
+  if (profCompanyType === 'company' && profDocument) {
+    // Buscar perfil da store
+    const storeProfile = user.store_profiles?.[0];
+    console.log('StoreProfile encontrado:', storeProfile);
+    
+    // Se não tem store ou CNPJ diferente, precisa de conta separada
+    if (!storeProfile || !storeProfile.document || storeProfile.document !== profDocument) {
+      console.log('Store não encontrada ou CNPJ diferente, precisa de conta separada');
+      return true;
+    }
+    
+    // Se tem store com mesmo CNPJ, não precisa de conta separada
+    console.log('Store com mesmo CNPJ, não precisa de conta separada');
+    return false;
+  }
+
+  console.log('Caso padrão, precisa de conta separada');
+  return true;
+};
+
 export function ProfessionalAreaScreen() {
   const navigation = useNavigation();
   const { scrollY, onScroll, scrollEventThrottle } = useScrollAwareHeader();
@@ -41,6 +81,8 @@ export function ProfessionalAreaScreen() {
   const [profStatus, setProfStatus] = useState<string | null>(null); // 'pending' | 'approved' | etc.
   const [accountGateway, setAccountGateway] = useState<AccountGateway | null>(null);
   const [showPaymentBanner, setShowPaymentBanner] = useState(true);
+  const [needsPaymentAccount, setNeedsPaymentAccount] = useState(false);
+  const [profDocument, setProfDocument] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -58,10 +100,20 @@ export function ProfessionalAreaScreen() {
       setProfileName(prof?.name ?? '');
       const professionalStatus = (prof as any)?.status ?? 'pending';
       setProfStatus(professionalStatus);
+      setProfDocument(prof?.document || null);
 
-      // Buscar conta de gateway de pagamento
-      if (current.id) {
-        const gateway = await PaymentGatewayService.getUserAccountGateway(current.id);
+      // Verificar se precisa de conta de pagamento
+      if (current.id && prof) {
+        const needsAccount = await checkIfNeedsPaymentAccount(current, prof);
+        setNeedsPaymentAccount(needsAccount);
+        
+        // Sempre buscar conta gateway para mostrar status correto
+        const profDocument = prof.document;
+        const gateway = await PaymentGatewayService.getUserAccountGateway(
+          current.id, 
+          profDocument || undefined, 
+          'professional'
+        );
         setAccountGateway(gateway);
       }
     })();
@@ -115,8 +167,32 @@ export function ProfessionalAreaScreen() {
   };
 
   const handlePaymentGatewayPress = () => {
-    navigation.navigate('PaymentGatewayRegistration' as never);
+    (navigation as any).navigate('PaymentGatewayRegistration', { context: 'professional' });
   };
+
+  // Atualizar dados quando retornar da tela de configuração
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', async () => {
+      const current = await getCurrentUserProfile();
+      if (current?.id) {
+        // Buscar perfil profissional
+        const profiles = Array.isArray(current.user_profiles) ? current.user_profiles : [];
+        const prof = profiles.find(p => p.user_type === 'professional') || profiles[0];
+        
+        if (prof) {
+          const profDocument = prof.document;
+          const gateway = await PaymentGatewayService.getUserAccountGateway(
+            current.id, 
+            profDocument || undefined, 
+            'professional'
+          );
+          setAccountGateway(gateway);
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   const handleClosePaymentBanner = () => {
     setShowPaymentBanner(false);
@@ -133,13 +209,15 @@ export function ProfessionalAreaScreen() {
     <SafeAreaView style={styles.container}>
       <Header scrollY={scrollY} onBack={handleBack} />
 
-      {/* Banner fora do contentContainer para full-bleed */}
-      {showPaymentBanner && profStatus === 'approved' && (
+      {/* Banner de pagamento */}
+      {showPaymentBanner && profStatus === 'approved' && (needsPaymentAccount || accountGateway) && (
         <PaymentGatewayBanner
           accountGateway={accountGateway}
           onPressRegister={handlePaymentGatewayPress}
           onClose={handleClosePaymentBanner}
           showCloseButton={accountGateway?.status === 'approved'}
+          context="professional"
+          document={profDocument || undefined}
         />
       )}
 

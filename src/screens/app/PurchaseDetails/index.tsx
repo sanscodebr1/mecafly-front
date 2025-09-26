@@ -42,12 +42,12 @@ import {
 } from '../../../services/shippingService';
 
 type RootStackParamList = {
-  MyPurchases: undefined;
-  PurchaseDetails: { purchaseId: string };
+  MyPurchasesScreen: undefined;
+  PurchaseDetailScreen: { purchaseId: string };
 };
 
-type PurchaseDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'PurchaseDetails'>;
-type PurchaseDetailScreenRouteProp = RouteProp<RootStackParamList, 'PurchaseDetails'>;
+type PurchaseDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'PurchaseDetailScreen'>;
+type PurchaseDetailScreenRouteProp = RouteProp<RootStackParamList, 'PurchaseDetailScreen'>;
 
 interface ShipmentTrackingProps {
   purchaseId: number;

@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 
 export type UserTypeEnum = 'customer' | 'seller' | 'professional';
-export type CompanyTypeEnum = 'MEI' | 'LTDA' | 'SA' | 'EIRELI';
+export type CompanyTypeEnum = 'individual' | 'company';
 export type UserStatusEnum = 'active' | 'pending' | 'inactive';
 
 // Customer Profile - obrigatório para todos
@@ -33,6 +33,7 @@ export type ProfessionalProfile = {
   description?: string | null;
   legal_representative?: string | null;
   company_type?: CompanyTypeEnum | null;
+  has_equipment?: boolean | null;
 };
 
 export type StoreProfile = {
