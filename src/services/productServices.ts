@@ -17,6 +17,7 @@ export interface ProductData {
   length?: number;
   weight?: number;
   declaredValue?: number;
+  pickupAvailable?: boolean; // Nova propriedade
 }
 
 export interface ProductCategory {
@@ -59,12 +60,13 @@ export interface ProductDetail {
   product_images: ProductImage[];
   total_images: number;
   main_image_url: string;
-  // Novos campos de frete
+  // Campos de frete
   height?: number;
   width?: number;
   length?: number;
   weight?: number;
   declared_value?: number;
+  allow_pickup?: boolean; // Nova propriedade
 }
 
 export interface Product {
@@ -76,6 +78,7 @@ export interface Product {
   description?: string;
   brand?: string;
   stock?: number;
+  pickupAvailable?: boolean; // Nova propriedade
 }
 
 // Função para formatar preço
@@ -118,7 +121,8 @@ export const getApprovedProducts = async (): Promise<Product[]> => {
       pic: product.main_image_url || 'https://via.placeholder.com/300x300?text=Sem+Imagem',
       description: product.product_description,
       brand: product.brand_name,
-      stock: product.stock
+      stock: product.stock,
+      allow_pickup: product.allow_pickup || false
     }));
   } catch (error) {
     console.error('Erro na busca de produtos:', error);
@@ -155,7 +159,8 @@ export const getApprovedProductsByCategory = async (categoryId: string): Promise
       pic: product.main_image_url || 'https://via.placeholder.com/300x300?text=Sem+Imagem',
       description: product.product_description,
       brand: product.brand_name,
-      stock: product.stock
+      stock: product.stock,
+      allow_pickup: product.allow_pickup || false
     }));
   } catch (error) {
     console.error('Erro na busca de produtos por categoria:', error);
@@ -219,7 +224,8 @@ export const getFeaturedProducts = async (limit: number = 10): Promise<Product[]
       pic: product.main_image_url || 'https://via.placeholder.com/300x300?text=Sem+Imagem',
       description: product.product_description,
       brand: product.brand_name,
-      stock: product.stock
+      stock: product.stock,
+      allow_pickup: product.allow_pickup || false
     }));
   } catch (error) {
     console.error('Erro na busca de produtos em destaque:', error);
@@ -260,7 +266,8 @@ export const searchApprovedProducts = async (searchTerm: string): Promise<Produc
       pic: product.main_image_url || 'https://via.placeholder.com/300x300?text=Sem+Imagem',
       description: product.product_description,
       brand: product.brand_name,
-      stock: product.stock
+      stock: product.stock,
+      allow_pickup: product.allow_pickup || false
     }));
   } catch (error) {
     console.error('Erro na busca de produtos:', error);
@@ -297,7 +304,8 @@ export const getProductsByCategories = async (categoryIds: string[]): Promise<Pr
       pic: product.main_image_url || 'https://via.placeholder.com/300x300?text=Sem+Imagem',
       description: product.product_description,
       brand: product.brand_name,
-      stock: product.stock
+      stock: product.stock,
+      allow_pickup: product.allow_pickup || false
     }));
   } catch (error) {
     console.error('Erro na busca de produtos por categorias:', error);
@@ -447,7 +455,7 @@ export const uploadProductImages = async (
   return uploadedUrls.filter((url): url is string => url !== null);
 };
 
-// Create product - Atualizada para incluir dados de frete
+// Create product - Atualizada para incluir allow_pickup
 export const createProduct = async (productData: ProductData): Promise<number> => {
   const { data: product, error } = await supabase
     .from('product')
@@ -460,12 +468,13 @@ export const createProduct = async (productData: ProductData): Promise<number> =
       store_id: productData.storeId,
       status: 'pending', // Sempre pending para aprovação do admin
       stock: productData.stock,
-      // Novos campos de frete
+      // Campos de frete
       height: productData.height,
       width: productData.width,
       length: productData.length,
       weight: productData.weight,
       declared_value: productData.declaredValue ? Math.round(productData.declaredValue * 100) : null, // Store in cents
+      allow_pickup: productData.pickupAvailable || false, // Nova propriedade com default false
     })
     .select('id')
     .single();
@@ -524,7 +533,7 @@ export const getCurrentUserStoreProfile = async () => {
   return storeProfile;
 };
 
-// Complete product creation flow - Atualizada para incluir dados de frete
+// Complete product creation flow - Atualizada para incluir allow_pickup
 export const createCompleteProduct = async (
   name: string,
   description: string,
@@ -539,6 +548,7 @@ export const createCompleteProduct = async (
     length: number;
     weight: number;
     declaredValue: number;
+    pickupAvailable: boolean; // Nova propriedade
   }
 ): Promise<number> => {
   try {
@@ -573,6 +583,7 @@ export const createCompleteProduct = async (
         length: shippingConfig.length,
         weight: shippingConfig.weight,
         declaredValue: shippingConfig.declaredValue,
+        pickupAvailable: shippingConfig.pickupAvailable, // Nova propriedade
       }),
     };
 
@@ -588,8 +599,7 @@ export const createCompleteProduct = async (
   }
 };
 
-
-// Context interface for product creation flow
+// Context interface for product creation flow - Atualizada com pickupAvailable
 export interface ProductCreationContext {
   selectedCategory?: { id: number; name: string };
   productDetails?: {
@@ -607,5 +617,6 @@ export interface ProductCreationContext {
     length: string;
     weight: string;
     declaredValue: string;
+    pickupAvailable: boolean; // Nova propriedade
   };
 }

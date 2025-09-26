@@ -17,6 +17,7 @@ export interface ProductCreationData {
     length: string;
     weight: string;
     declaredValue: string;
+    pickupAvailable: boolean; 
   };
 }
 
@@ -38,6 +39,7 @@ interface ProductCreationContextType {
     length: string;
     weight: string;
     declaredValue: string;
+    pickupAvailable: boolean; // Nova propriedade
   }) => void;
   clearProductData: () => void;
 }
@@ -75,6 +77,7 @@ export const ProductCreationProvider: React.FC<{ children: ReactNode }> = ({ chi
     length: string;
     weight: string;
     declaredValue: string;
+    pickupAvailable: boolean; // Nova propriedade
   }) => {
     setProductData(prev => ({ ...prev, shippingConfig: config }));
   };

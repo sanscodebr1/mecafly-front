@@ -16,7 +16,7 @@ import { Header } from '../../../components/Header';
 import { StepIndicator } from '../../../components/StepIndicator';
 import { getUserCart, CartSummary } from '../../../services/cart';
 import { UserAddress } from '../../../services/userAddress';
-import { calculateShipping, StoreShippingGroup, ShippingOption } from '../../../services/shippingService';
+import { calculateShipping, StoreShippingGroup, ShippingOption, StoreAddress } from '../../../services/shippingService';
 
 interface RouteParams {
   selectedAddress?: UserAddress;
@@ -119,6 +119,35 @@ export function DeliveryMethodScreen() {
     });
   };
 
+  // Componente para exibir endereço da loja para retirada
+  const StoreAddressComponent = ({ storeAddress }: { storeAddress: StoreAddress }) => (
+    <View style={styles.storeAddressContainer}>
+      <Text style={styles.storeAddressTitle}>📍 Endereço para retirada:</Text>
+      <Text style={styles.storeAddressText}>
+        {storeAddress.address}, {storeAddress.number}
+      </Text>
+      {storeAddress.complement && (
+        <Text style={styles.storeAddressText}>
+          {storeAddress.complement}
+        </Text>
+      )}
+      <Text style={styles.storeAddressText}>
+        {storeAddress.neighborhood}
+      </Text>
+      <Text style={styles.storeAddressText}>
+        {storeAddress.city} - {storeAddress.state}
+      </Text>
+      <Text style={styles.storeAddressText}>
+        CEP: {storeAddress.zipcode}
+      </Text>
+      {storeAddress.phone && (
+        <Text style={styles.storeAddressPhone}>
+          📞 {storeAddress.phone}
+        </Text>
+      )}
+    </View>
+  );
+
   // Componente para exibir produtos da loja
   const StoreItemsComponent = ({ items }: { items: any[] }) => (
     <View style={styles.storeItemsContainer}>
@@ -167,43 +196,49 @@ export function DeliveryMethodScreen() {
         <View style={styles.shippingOptionsContainer}>
           <Text style={styles.shippingOptionsTitle}>Opções de frete:</Text>
           {group.shippingOptions.map((option) => (
-            <TouchableOpacity
-              key={option.id}
-              style={[
-                styles.deliveryOption,
-                selectedOption?.id === option.id && styles.deliveryOptionSelected,
-                option.error && styles.deliveryOptionError
-              ]}
-              onPress={() => !option.error && handleMethodSelection(group.storeId, option)}
-              disabled={!!option.error}
-            >
-              <View style={styles.radioCircle}>
-                {selectedOption?.id === option.id && !option.error && (
-                  <View style={styles.selectedDot} />
-                )}
-              </View>
-              <View style={styles.deliveryOptionContent}>
-                <Text style={styles.deliveryOptionTitle}>
-                  {option.name} - {option.company}
-                </Text>
-                <Text style={[
-                  styles.deliveryOptionDetail,
-                  option.error && styles.errorText
-                ]}>
-                  {option.error || option.deadline}
-                </Text>
-                {option.deliveryRange && !option.error && (
-                  <Text style={styles.deliveryRangeText}>
-                    Entrega entre {option.deliveryRange.min} e {option.deliveryRange.max} dias úteis
-                  </Text>
-                )}
-              </View>
-              {!option.error && (
-                <View style={styles.priceTag}>
-                  <Text style={styles.priceText}>{option.priceFormatted}</Text>
+            <View key={option.id}>
+              <TouchableOpacity
+                style={[
+                  styles.deliveryOption,
+                  selectedOption?.id === option.id && styles.deliveryOptionSelected,
+                  option.error && styles.deliveryOptionError
+                ]}
+                onPress={() => !option.error && handleMethodSelection(group.storeId, option)}
+                disabled={!!option.error}
+              >
+                <View style={styles.radioCircle}>
+                  {selectedOption?.id === option.id && !option.error && (
+                    <View style={styles.selectedDot} />
+                  )}
                 </View>
+                <View style={styles.deliveryOptionContent}>
+                  <Text style={styles.deliveryOptionTitle}>
+                    {option.name} - {option.company}
+                  </Text>
+                  <Text style={[
+                    styles.deliveryOptionDetail,
+                    option.error && styles.errorText
+                  ]}>
+                    {option.error || option.deadline}
+                  </Text>
+                  {option.deliveryRange && !option.error && (
+                    <Text style={styles.deliveryRangeText}>
+                      Entrega entre {option.deliveryRange.min} e {option.deliveryRange.max} dias úteis
+                    </Text>
+                  )}
+                </View>
+                {!option.error && (
+                  <View style={styles.priceTag}>
+                    <Text style={styles.priceText}>{option.priceFormatted}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              
+              {/* Mostrar endereço da loja se for retirada na loja e estiver selecionada */}
+              {selectedOption?.id === option.id && option.isStorePickup && group.storePickupAddress && (
+                <StoreAddressComponent storeAddress={group.storePickupAddress} />
               )}
-            </TouchableOpacity>
+            </View>
           ))}
         </View>
       </View>
@@ -464,7 +499,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: wp('1.5%'),
     paddingHorizontal: wp('3%'),
-    paddingVertical: hp('1.5%'),
+    paddingVertical: hp('1.2%'), // Reduzido de hp('1.5%') para hp('1.2%')
     borderWidth: 1,
     borderColor: '#e0e0e0',
     marginBottom: hp('1%'),
@@ -515,12 +550,34 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: hp('0.25%'),
   },
-  // Estilo para o Service ID
-  serviceIdText: {
-    fontSize: wp('2.8%'),
+  // Novo estilo para endereço da loja
+  storeAddressContainer: {
+    backgroundColor: '#e8f4ff',
+    borderRadius: wp('2%'),
+    padding: wp('3%'),
+    marginTop: hp('1%'),
+    marginLeft: wp('8%'), // Para alinhar com o conteúdo da opção selecionada
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
+  storeAddressTitle: {
+    fontSize: wp('3.4%'),
+    fontFamily: fonts.bold700,
+    color: '#007AFF',
+    marginBottom: hp('0.5%'),
+  },
+  storeAddressText: {
+    fontSize: wp('3.2%'),
     fontFamily: fonts.regular400,
-    color: '#999',
-    fontStyle: 'italic',
+    color: '#333',
+    lineHeight: wp('4.2%'),
+    marginBottom: hp('0.1%'),
+  },
+  storeAddressPhone: {
+    fontSize: wp('3.2%'),
+    fontFamily: fonts.semiBold600,
+    color: '#007AFF',
+    marginTop: hp('0.3%'),
   },
   errorText: {
     color: '#ff6b6b',
@@ -529,7 +586,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0e3e6',
     borderRadius: wp('1.5%'),
     paddingHorizontal: wp('2.5%'),
-    paddingVertical: hp('0.75%'),
+    paddingVertical: hp('0.6%'), // Reduzido de hp('0.75%') para hp('0.6%')
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -564,7 +621,7 @@ const styles = StyleSheet.create({
   continueButton: {
     backgroundColor: '#22D883',
     borderRadius: wp('6%'),
-    paddingVertical: hp('1.5%'),
+    paddingVertical: hp('1.2%'), // Reduzido de hp('1.5%') para hp('1.2%')
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -585,7 +642,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#22D883',
     borderRadius: wp('2%'),
     paddingHorizontal: wp('6%'),
-    paddingVertical: hp('1.5%'),
+    paddingVertical: hp('1.2%'), // Reduzido de hp('1.5%') para hp('1.2%')
     marginTop: hp('2%'),
   },
   backButtonText: {

@@ -3,64 +3,55 @@ import 'react-native-get-random-values';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = 'https://bssiovkeezfhavfisals.supabase.co';
+// Configurações de produção
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzc2lvdmtlZXpmaGF2ZmlzYWxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYxNDM1NjAsImV4cCI6MjA3MTcxOTU2MH0.Ne_L8SZJn5Lg3_DY1i_2RVHABGLlQrcma7JkW3TkNgc'; // ⚠️ Substitua pela chave anon real!
+if (!SUPABASE_ANON_KEY) {
+  throw new Error('EXPO_PUBLIC_SUPABASE_ANON_KEY não encontrada. Verifique suas variáveis de ambiente.');
+}
+
+// Storage customizado para React Native
+const storage = {
+  getItem: async (key: string) => {
+    try {
+      return await AsyncStorage.getItem(key);
+    } catch (error) {
+      console.error('Erro ao buscar item do storage:', error);
+      return null;
+    }
+  },
+  setItem: async (key: string, value: string) => {
+    try {
+      await AsyncStorage.setItem(key, value);
+    } catch (error) {
+      console.error('Erro ao salvar item no storage:', error);
+    }
+  },
+  removeItem: async (key: string) => {
+    try {
+      await AsyncStorage.removeItem(key);
+    } catch (error) {
+      console.error('Erro ao remover item do storage:', error);
+    }
+  },
+};
 
 export const supabase = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY, {
   auth: {
-    storage: AsyncStorage,
+    storage: storage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    storageKey: 'sb-bssiovkeezfhavfisals-auth-token',
     flowType: 'pkce',
+    debug: __DEV__, // Só ativa debug em desenvolvimento
   },
   global: {
     headers: {
-      'X-Client-Info': 'react-native-mercafly',
+      'X-Client-Info': 'mecafly-react-native',
     },
   },
 });
-
-// Função para debug da configuração
-export const debugSupabaseAuth = async () => {
-  console.log('🔍 DEBUG SUPABASE AUTH');
-  console.log('========================');
-  
-  try {
-    // 1. Verificar sessão atual
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    console.log('📱 Sessão atual:', sessionData.session ? 'ENCONTRADA' : 'NÃO ENCONTRADA');
-    
-    if (sessionError) {
-      console.log('❌ Erro na sessão:', sessionError.message);
-    }
-    
-    // 2. Verificar usuário
-    if (sessionData.session) {
-      console.log('👤 User ID:', sessionData.session.user.id);
-      console.log('📧 Email:', sessionData.session.user.email);
-      console.log('⏰ Token expira em:', new Date(sessionData.session.expires_at! * 1000));
-      
-      // 3. Testar chamada autenticada
-      const { data: profileData, error: profileError } = await supabase
-        .from('customer_profile')
-        .select('*')
-        .eq('user_id', sessionData.session.user.id)
-        .single();
-        
-      console.log('👤 Customer Profile:', profileData ? 'ENCONTRADO' : 'NÃO ENCONTRADO');
-      
-      if (profileError) {
-        console.log('❌ Erro no profile:', profileError.message);
-      }
-    }
-    
-  } catch (error) {
-    console.log('💥 Erro geral:', error);
-  }
-  
-  console.log('========================');
-};
 
 export type SupabaseClientType = typeof supabase;

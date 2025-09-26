@@ -69,6 +69,8 @@ import { PurchaseDetailScreen } from "../screens/app/PurchaseDetails";
 import { KycTestScreen } from "../screens/app/KycTest";
 import { CreditCardPaymentConfirmationScreen } from "../screens/app/CreditCardPaymentConfirmation";
 import { BoletoPaymentScreen } from "../screens/app/BoletoPayment";
+import { SupportScreen } from "../screens/app/PurchaseSupport";
+import { SaleSupportScreen } from "../screens/app/SaleSupport";
 
 // Enable native screens
 enableScreens();
@@ -140,6 +142,8 @@ export type RootStackParamList = {
   KycTest: undefined;
   CreditCardPaymentConfirmationScreen: undefined;
   BoletoPaymentScreen: undefined;
+  SupportScreen: undefined;
+  SaleSupportScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -221,6 +225,33 @@ export function Routes() {
         <Stack.Screen name="CreditCardPaymentConfirmationScreen" component={CreditCardPaymentConfirmationScreen} />
         <Stack.Screen name="BoletoPaymentScreen" component={BoletoPaymentScreen} />
       </Stack.Navigator>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
     </NavigationContainer>
   );
 }
